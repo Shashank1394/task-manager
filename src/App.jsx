@@ -6,33 +6,45 @@ export default function App() {
     const stored = localStorage.getItem("tasks");
     return stored ? JSON.parse(stored) : [];
   });
+
   const [value, setValue] = useState("");
 
   useEffect(() => {
     localStorage.setItem("tasks", JSON.stringify(tasks));
-    console.log(tasks);
   }, [tasks]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-
     if (!value.trim()) return;
 
-    setTasks([...tasks, { text: value, completed: false }]);
+    setTasks([
+      ...tasks,
+      { id: crypto.randomUUID(), text: value, completed: false },
+    ]);
     setValue("");
+  };
+
+  const toggleTask = (id) => {
+    setTasks(
+      tasks.map((task) =>
+        task.id === id ? { ...task, completed: !task.completed } : task,
+      ),
+    );
+  };
+
+  const handleDelete = (id) => {
+    setTasks(tasks.filter((task) => task.id !== id));
   };
 
   return (
     <div>
-      <div>
-        <h1>Task Manager</h1>
-      </div>
+      <h1>Task Manager</h1>
 
       <div>
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={(e) => handleSubmit(e)}>
           <input
             value={value}
-            placeholder="Enter a task..."
+            placeholder="Enter a task"
             autoFocus
             onChange={(e) => setValue(e.target.value)}
           />
@@ -42,8 +54,18 @@ export default function App() {
 
       <div>
         <ul>
-          {tasks.map((task, index) => (
-            <li key={index}>{task.text}</li>
+          {tasks.map((task) => (
+            <li key={task.id}>
+              <span className={task.completed ? "line-through" : ""}>
+                <input
+                  type="checkbox"
+                  checked={task.completed}
+                  onChange={() => toggleTask(task.id)}
+                />
+                {task.text}
+              </span>
+              <button onClick={() => handleDelete(task.id)}>❌</button>
+            </li>
           ))}
         </ul>
       </div>
