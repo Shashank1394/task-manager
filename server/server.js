@@ -11,10 +11,10 @@ dotenv.config();
 const app = express();
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: "https://task-manager-n4435yaak-shashank1394s-projects.vercel.app",
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
-  }),
+  })
 );
 app.use(express.json());
 app.use("/auth", authRoutes);
@@ -83,7 +83,7 @@ app.put("/tasks/:id", verifyToken, async (req, res) => {
     const task = await Task.findByIdAndUpdate(
       req.params.id,
       { text },
-      { new: true, runValidators: true },
+      { new: true, runValidators: true }
     );
 
     if (!task) return res.status(404).json({ error: "Task not found" });
