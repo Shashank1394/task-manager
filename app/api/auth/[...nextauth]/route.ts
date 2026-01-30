@@ -12,19 +12,19 @@ export const authOptions: AuthOptions = {
   adapter: PrismaAdapter(prisma) as Adapter,
 
   providers: [
-    // ===== GOOGLE OAUTH =====
+    // GOOGLE OAUTH
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
 
-    // ===== GITHUB OAUTH =====
+    // GITHUB OAUTH
     GitHubProvider({
       clientId: process.env.GITHUB_CLIENT_ID!,
       clientSecret: process.env.GITHUB_CLIENT_SECRET!,
     }),
 
-    // ===== EMAIL + PASSWORD =====
+    // EMAIL + PASSWORD
     CredentialsProvider({
       name: "Credentials",
       credentials: {
