@@ -10,7 +10,7 @@ export async function GET(
     const { projectId } = await context.params;
     const session = await requireAuth();
 
-    // 1️⃣ Get project
+    // Get project
     const project = await prisma.project.findUnique({
       where: { id: projectId },
       include: {
@@ -24,7 +24,7 @@ export async function GET(
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
-    // 2️⃣ Check membership
+    // Check membership
     const isMember = project.organization.members.some(
       (m) => m.userId === session.user.id,
     );
@@ -33,7 +33,7 @@ export async function GET(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // 3️⃣ Check GitHub repo attached
+    // Check GitHub repo attached
     if (
       project.repoProvider !== "GITHUB" ||
       !project.repoOwner ||
@@ -45,7 +45,7 @@ export async function GET(
       );
     }
 
-    // 4️⃣ Get GitHub account + token
+    // Get GitHub account + token
     const githubAccount = await prisma.account.findFirst({
       where: {
         userId: session.user.id,
@@ -67,7 +67,7 @@ export async function GET(
 
     const baseUrl = `https://api.github.com/repos/${project.repoOwner}/${project.repoName}`;
 
-    // 5️⃣ Fetch repo details
+    // Fetch repo details
     const repoRes = await fetch(baseUrl, { headers });
     if (!repoRes.ok) {
       return NextResponse.json(
@@ -78,7 +78,7 @@ export async function GET(
 
     const repo = await repoRes.json();
 
-    // 6️⃣ Fetch latest commit
+    // Fetch latest commit
     const commitsRes = await fetch(`${baseUrl}/commits?per_page=1`, {
       headers,
     });
@@ -87,7 +87,7 @@ export async function GET(
 
     const latestCommit = commits[0] ?? null;
 
-    // 7️⃣ Fetch open PRs
+    // Fetch open PRs
     const pullsRes = await fetch(`${baseUrl}/pulls?state=open`, { headers });
 
     const pulls = pullsRes.ok ? await pullsRes.json() : [];
