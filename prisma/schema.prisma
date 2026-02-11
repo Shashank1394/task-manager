@@ -36,6 +36,10 @@ enum TaskPriority {
   HIGH
 }
 
+enum RepoProvider {
+  GITHUB
+}
+
 // MODELS
 
 model User {
@@ -123,6 +127,10 @@ model Project {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   board          Board?
+
+  repoProvider   RepoProvider?
+  repoOwner      String?
+  repoName       String?
 }
 
 model Board {
