@@ -1,4 +1,3 @@
-import "../styles/layout.scss";
 import Sidebar from "../components/layout/Sidebar";
 import Topbar from "../components/layout/Topbar";
 

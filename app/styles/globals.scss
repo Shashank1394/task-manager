@@ -1,6 +1,8 @@
 @use "tailwindcss";
 @use "./variables";
 @use "./mixins";
+@use "./layout.scss";
+@use "./orgs";
 
 body {
   background-color: var(--bg-primary);
