@@ -1,6 +1,16 @@
 @use "tailwindcss";
+@use "./variables";
+@use "./mixins";
 
 body {
-  background: #0f172a;
-  color: #e5e7eb;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
 }
