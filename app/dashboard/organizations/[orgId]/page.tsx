@@ -1,33 +1,35 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
+import Link from "next/link";
 
-type Org = {
+type Project = {
   id: string;
   name: string;
   createdAt: string;
 };
 
-export default function OrganizationsPage() {
-  const [orgs, setOrgs] = useState<Org[]>([]);
+export default function OrgProjectsPage() {
+  const { orgId } = useParams();
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
   const [name, setName] = useState("");
+  const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
-    fetch("/api/organizations")
+    fetch(`/api/organizations/${orgId}/projects`)
       .then((res) => res.json())
       .then((data) => {
-        setOrgs(data);
+        setProjects(data);
         setLoading(false);
       });
-  }, []);
+  }, [orgId]);
 
-  const createOrg = async () => {
+  const createProject = async () => {
     if (!name.trim()) return;
 
-    const res = await fetch("/api/organizations", {
+    const res = await fetch(`/api/organizations/${orgId}/projects`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -35,52 +37,52 @@ export default function OrganizationsPage() {
       body: JSON.stringify({ name }),
     });
 
-    const newOrg = await res.json();
+    const newProject = await res.json();
 
-    setOrgs((prev) => [newOrg, ...prev]);
+    setProjects((prev) => [newProject, ...prev]);
     setName("");
     setShowModal(false);
   };
 
-  if (loading) return <p>Loading organizations...</p>;
+  if (loading) return <p>Loading projects...</p>;
 
   return (
     <div>
       <div className="org-header">
-        <h1>Organizations</h1>
+        <h1>Projects</h1>
         <button className="btn btn-primary" onClick={() => setShowModal(true)}>
           + Create
         </button>
       </div>
 
-      {orgs.length === 0 ? (
-        <p>No organizations yet.</p>
+      {projects.length === 0 ? (
+        <p>No projects yet.</p>
       ) : (
         <div className="org-grid">
-          {orgs.map((org) => (
+          {projects.map((p) => (
             <Link
-              href={`/dashboard/organizations/${org.id}`}
-              key={org.id}
+              href={`/dashboard/project/${p.id}`}
+              key={p.id}
               className="org-card"
             >
-              <h5>{org.name}</h5>
+              <h5>{p.name}</h5>
               <small>
-                Created {new Date(org.createdAt).toLocaleDateString()}
+                Created {new Date(p.createdAt).toLocaleDateString()}
               </small>
             </Link>
           ))}
         </div>
       )}
 
-      {/* MODAL */}
+      {/* Modal */}
       {showModal && (
         <div className="modal-backdrop">
           <div className="modal-box">
-            <h4>Create Organization</h4>
+            <h4>Create Project</h4>
 
             <input
               type="text"
-              placeholder="Organization name"
+              placeholder="Project name"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
@@ -93,7 +95,7 @@ export default function OrganizationsPage() {
                 Cancel
               </button>
 
-              <button className="btn btn-primary" onClick={createOrg}>
+              <button className="btn btn-primary" onClick={createProject}>
                 Create
               </button>
             </div>
