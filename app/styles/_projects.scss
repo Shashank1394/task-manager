@@ -24,14 +24,59 @@
   background: var(--bg-muted);
   padding: 1rem;
   border-radius: 0.5rem;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+  border: 2px solid transparent;
+
+  &.drag-over {
+    border-color: var(--text-primary);
+    background: color-mix(in srgb, var(--bg-muted) 80%, var(--text-primary));
+  }
 }
 
 .task-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   background: var(--bg-surface);
   padding: 0.5rem;
   margin-bottom: 0.5rem;
   border-radius: 0.25rem;
   border: 1px solid var(--border-color);
+  cursor: grab;
+  transition:
+    opacity 0.2s ease,
+    box-shadow 0.2s ease;
+
+  &:active {
+    cursor: grabbing;
+  }
+
+  &.dragging {
+    opacity: 0.4;
+  }
+}
+
+.task-actions {
+  display: flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.move-btn {
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: 0.25rem;
+  cursor: pointer;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: var(--bg-muted);
+  }
 }
 
 /* GITHUB PANEL */
@@ -46,4 +91,19 @@
   @media (min-width: 992px) {
     width: 300px;
   }
+}
+
+.task-input {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.task-input input {
+  flex: 1;
+  padding: 0.25rem;
+}
+
+.task-input button {
+  padding: 0.25rem 0.5rem;
 }

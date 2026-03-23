@@ -10,7 +10,7 @@ export async function POST(
   const { boardId } = await context.params;
   const session = await requireAuth();
 
-  const { title, description, priority } = await req.json();
+  const { title, description, priority, status } = await req.json();
 
   if (!title || title.trim().length < 3) {
     return NextResponse.json(
@@ -37,12 +37,17 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const isValidStatus =
+    status === TaskStatus.TODO ||
+    status === TaskStatus.IN_PROGRESS ||
+    status === TaskStatus.DONE;
+
   const task = await prisma.task.create({
     data: {
       title,
       description,
       priority: priority ?? TaskPriority.MEDIUM,
-      status: TaskStatus.TODO,
+      status: isValidStatus ? status : TaskStatus.TODO,
       boardId,
     },
   });
