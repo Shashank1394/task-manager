@@ -1,0 +1,95 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth-server";
+
+export async function GET(
+  _req: Request,
+  context: { params: Promise<{ taskId: string }> },
+) {
+  try {
+    const { taskId } = await context.params;
+    const session = await requireAuth();
+
+    // Verify access
+    const task = await prisma.task.findFirst({
+      where: {
+        id: taskId,
+        board: {
+          project: {
+            organization: {
+              members: { some: { userId: session.user.id } },
+            },
+          },
+        },
+      },
+    });
+
+    if (!task) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const comments = await prisma.comment.findMany({
+      where: { taskId },
+      orderBy: { createdAt: "asc" },
+      include: {
+        user: { select: { id: true, name: true, image: true } },
+      },
+    });
+
+    return NextResponse.json(comments);
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+}
+
+export async function POST(
+  req: Request,
+  context: { params: Promise<{ taskId: string }> },
+) {
+  try {
+    const { taskId } = await context.params;
+    const session = await requireAuth();
+
+    const { content } = await req.json();
+
+    if (!content || content.trim().length === 0) {
+      return NextResponse.json(
+        { error: "Comment cannot be empty" },
+        { status: 400 },
+      );
+    }
+
+    // Verify access
+    const task = await prisma.task.findFirst({
+      where: {
+        id: taskId,
+        board: {
+          project: {
+            organization: {
+              members: { some: { userId: session.user.id } },
+            },
+          },
+        },
+      },
+    });
+
+    if (!task) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const comment = await prisma.comment.create({
+      data: {
+        content: content.trim(),
+        taskId,
+        userId: session.user.id,
+      },
+      include: {
+        user: { select: { id: true, name: true, image: true } },
+      },
+    });
+
+    return NextResponse.json(comment, { status: 201 });
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+}

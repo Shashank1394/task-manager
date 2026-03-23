@@ -40,6 +40,7 @@ export async function GET(
       id: project.id,
       name: project.name,
       description: project.description,
+      organizationId: project.organizationId,
       board: project.board,
     });
   } catch (error) {

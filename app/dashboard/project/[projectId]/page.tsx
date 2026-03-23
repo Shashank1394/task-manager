@@ -2,11 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import TaskDetailPanel from "@/app/components/TaskDetailPanel";
 
 type Task = {
   id: string;
   title: string;
   status: "TODO" | "IN_PROGRESS" | "DONE";
+  priority: "LOW" | "MEDIUM" | "HIGH";
+  assignee: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    image: string | null;
+  } | null;
+  _count: { comments: number };
 };
 
 type GitHubStatus = {
@@ -35,6 +44,7 @@ export default function ProjectPage() {
   const [newTask, setNewTask] = useState<{ [key: string]: string }>({});
   const [boardId, setBoardId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   const fetchJson = async <T,>(url: string): Promise<T> => {
     const res = await fetch(url);
@@ -108,6 +118,12 @@ export default function ProjectPage() {
   };
 
   const statusOrder: Task["status"][] = ["TODO", "IN_PROGRESS", "DONE"];
+
+  const handleTaskUpdated = (updated: Task) => {
+    setTasks((prev) =>
+      prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)),
+    );
+  };
 
   const moveTask = async (taskId: string, newStatus: Task["status"]) => {
     // Optimistic update
@@ -206,28 +222,64 @@ export default function ProjectPage() {
                     e.dataTransfer.effectAllowed = "move";
                   }}
                   onDragEnd={() => setDraggingId(null)}
+                  onClick={() => setSelectedTaskId(task.id)}
                 >
-                  <span>{task.title}</span>
-                  <span className="task-actions">
-                    {idx > 0 && (
-                      <button
-                        className="move-btn"
-                        onClick={() => moveTask(task.id, statusOrder[idx - 1])}
-                        title={`Move to ${statusOrder[idx - 1].replace("_", " ")}`}
+                  <div className="task-card-content">
+                    <span
+                      className={`priority-dot priority-${task.priority.toLowerCase()}`}
+                      title={task.priority}
+                    />
+                    <span className="task-title">{task.title}</span>
+                  </div>
+                  <div className="task-card-meta">
+                    {task._count.comments > 0 && (
+                      <span
+                        className="comment-badge"
+                        title={`${task._count.comments} comment(s)`}
                       >
-                        &larr;
-                      </button>
+                        💬 {task._count.comments}
+                      </span>
                     )}
-                    {idx < statusOrder.length - 1 && (
-                      <button
-                        className="move-btn"
-                        onClick={() => moveTask(task.id, statusOrder[idx + 1])}
-                        title={`Move to ${statusOrder[idx + 1].replace("_", " ")}`}
+                    {task.assignee && (
+                      <span
+                        className="assignee-avatar"
+                        title={
+                          task.assignee.name ??
+                          task.assignee.email ??
+                          "Assigned"
+                        }
                       >
-                        &rarr;
-                      </button>
+                        {task.assignee.name?.[0]?.toUpperCase() ?? "?"}
+                      </span>
                     )}
-                  </span>
+                    <span
+                      className="task-actions"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {idx > 0 && (
+                        <button
+                          className="move-btn"
+                          onClick={() =>
+                            moveTask(task.id, statusOrder[idx - 1])
+                          }
+                          title={`Move to ${statusOrder[idx - 1].replace("_", " ")}`}
+                        >
+                          &larr;
+                        </button>
+                      )}
+                      {idx < statusOrder.length - 1 && (
+                        <button
+                          className="move-btn"
+                          onClick={() =>
+                            moveTask(task.id, statusOrder[idx + 1])
+                          }
+                          title={`Move to ${statusOrder[idx + 1].replace("_", " ")}`}
+                        >
+                          &rarr;
+                        </button>
+                      )}
+                    </span>
+                  </div>
                 </div>
               );
             })}
@@ -258,6 +310,15 @@ export default function ProjectPage() {
           </>
         )}
       </div>
+
+      {/* TASK DETAIL PANEL */}
+      {selectedTaskId && (
+        <TaskDetailPanel
+          taskId={selectedTaskId}
+          onClose={() => setSelectedTaskId(null)}
+          onTaskUpdated={handleTaskUpdated}
+        />
+      )}
     </div>
   );
 }

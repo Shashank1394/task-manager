@@ -52,7 +52,15 @@ export async function POST(
     },
   });
 
-  return NextResponse.json(task, { status: 201 });
+  const created = await prisma.task.findUnique({
+    where: { id: task.id },
+    include: {
+      assignee: { select: { id: true, name: true, email: true, image: true } },
+      _count: { select: { comments: true } },
+    },
+  });
+
+  return NextResponse.json(created, { status: 201 });
 }
 
 export async function GET(
@@ -82,6 +90,10 @@ export async function GET(
   const tasks = await prisma.task.findMany({
     where: { boardId },
     orderBy: { createdAt: "asc" },
+    include: {
+      assignee: { select: { id: true, name: true, email: true, image: true } },
+      _count: { select: { comments: true } },
+    },
   });
 
   return NextResponse.json(tasks);

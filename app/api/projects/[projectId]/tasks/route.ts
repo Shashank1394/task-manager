@@ -39,6 +39,12 @@ export async function GET(
     const tasks = await prisma.task.findMany({
       where: { boardId: project.board.id },
       orderBy: { createdAt: "asc" },
+      include: {
+        assignee: {
+          select: { id: true, name: true, email: true, image: true },
+        },
+        _count: { select: { comments: true } },
+      },
     });
 
     return NextResponse.json(tasks);
