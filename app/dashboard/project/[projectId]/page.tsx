@@ -55,6 +55,7 @@ export default function ProjectPage() {
   const [boardId, setBoardId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [showCompleted, setShowCompleted] = useState(false);
 
   const fetchJson = async <T,>(url: string): Promise<T> => {
     const res = await fetch(url);
@@ -139,6 +140,28 @@ export default function ProjectPage() {
     );
   };
 
+  const completeTask = async (taskId: string) => {
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === taskId ? { ...t, status: "DONE" as const } : t,
+      ),
+    );
+
+    const res = await fetch(`/api/tasks/${taskId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "DONE" }),
+    });
+
+    if (!res.ok) {
+      const taskData = await fetchJson<Task[]>(
+        `/api/projects/${projectIdParam}/tasks`,
+      );
+      setTasks(taskData);
+      console.error("Failed to complete task");
+    }
+  };
+
   const deleteTask = async (taskId: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
 
@@ -220,136 +243,224 @@ export default function ProjectPage() {
 
   if (loading) return <p>Loading project...</p>;
 
-  const columns = {
+  const boardColumns = {
     TODO: tasks.filter((t) => t.status === "TODO"),
     IN_PROGRESS: tasks.filter((t) => t.status === "IN_PROGRESS"),
-    DONE: tasks.filter((t) => t.status === "DONE"),
   };
+  const completedTasks = tasks.filter((t) => t.status === "DONE");
 
   return (
     <div className="project-page">
-      {/* BOARD */}
-      <div className="board">
-        {Object.entries(columns).map(([status, items]) => (
-          <div
-            key={status}
-            className={`column ${draggingId ? "drop-target" : ""}`}
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.currentTarget.classList.add("drag-over");
-            }}
-            onDragLeave={(e) => {
-              e.currentTarget.classList.remove("drag-over");
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              e.currentTarget.classList.remove("drag-over");
-              if (draggingId) {
-                moveTask(draggingId, status as Task["status"]);
-                setDraggingId(null);
-              }
-            }}
-          >
-            <h5>{status.replace("_", " ")}</h5>
-
-            {/* CREATE TASK INPUT */}
-            <div className="task-input">
-              <input
-                type="text"
-                placeholder="New task..."
-                value={newTask[status] || ""}
-                onChange={(e) =>
-                  setNewTask((prev) => ({
-                    ...prev,
-                    [status]: e.target.value,
-                  }))
+      <div className="board-area">
+        {/* BOARD */}
+        <div className="board">
+          {Object.entries(boardColumns).map(([status, items]) => (
+            <div
+              key={status}
+              className={`column ${draggingId ? "drop-target" : ""}`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.currentTarget.classList.add("drag-over");
+              }}
+              onDragLeave={(e) => {
+                e.currentTarget.classList.remove("drag-over");
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.currentTarget.classList.remove("drag-over");
+                if (draggingId) {
+                  moveTask(draggingId, status as Task["status"]);
+                  setDraggingId(null);
                 }
-              />
+              }}
+            >
+              <div className="column-header">
+                <h5>{status.replace("_", " ")}</h5>
+                <span className="column-count">{items.length}</span>
+              </div>
 
-              <button onClick={() => createTask(status)}>+</button>
-            </div>
-
-            {/* TASKS */}
-            {items.map((task) => {
-              const idx = statusOrder.indexOf(task.status);
-              return (
-                <div
-                  key={task.id}
-                  className={`task-card ${draggingId === task.id ? "dragging" : ""}`}
-                  draggable
-                  onDragStart={(e) => {
-                    setDraggingId(task.id);
-                    e.dataTransfer.effectAllowed = "move";
+              {/* CREATE TASK INPUT */}
+              <div className="task-input">
+                <input
+                  type="text"
+                  placeholder="New task..."
+                  value={newTask[status] || ""}
+                  onChange={(e) =>
+                    setNewTask((prev) => ({
+                      ...prev,
+                      [status]: e.target.value,
+                    }))
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") createTask(status);
                   }}
-                  onDragEnd={() => setDraggingId(null)}
-                  onClick={() => setSelectedTaskId(task.id)}
-                >
-                  <div className="task-card-content">
-                    <span
-                      className={`priority-dot priority-${task.priority.toLowerCase()}`}
-                      title={task.priority}
-                    />
-                    <span className="task-title">{task.title}</span>
-                  </div>
-                  <div className="task-card-meta">
-                    {task.githubIssueUrl && (
-                      <a
-                        href={task.githubIssueUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="gh-issue-link"
-                        title="View on GitHub"
+                />
+
+                <button onClick={() => createTask(status)}>+</button>
+              </div>
+
+              {/* TASKS */}
+              {items.map((task) => {
+                const idx = statusOrder.indexOf(task.status);
+                return (
+                  <div
+                    key={task.id}
+                    className={`task-card ${draggingId === task.id ? "dragging" : ""}`}
+                    draggable
+                    onDragStart={(e) => {
+                      setDraggingId(task.id);
+                      e.dataTransfer.effectAllowed = "move";
+                    }}
+                    onDragEnd={() => setDraggingId(null)}
+                    onClick={() => setSelectedTaskId(task.id)}
+                  >
+                    <div className="task-card-top">
+                      <div className="task-card-content">
+                        <span
+                          className={`priority-dot priority-${task.priority.toLowerCase()}`}
+                          title={task.priority}
+                        />
+                        <span className="task-title">{task.title}</span>
+                      </div>
+                      {task.status !== "DONE" && (
+                        <button
+                          className="complete-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            completeTask(task.id);
+                          }}
+                          title="Mark as complete"
+                        >
+                          &#10003;
+                        </button>
+                      )}
+                    </div>
+                    <div className="task-card-bottom">
+                      <div className="task-card-meta">
+                        {task.githubIssueUrl && (
+                          <a
+                            href={task.githubIssueUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="gh-issue-link"
+                            title="View on GitHub"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            GH
+                          </a>
+                        )}
+                        {task._count.comments > 0 && (
+                          <span
+                            className="comment-badge"
+                            title={`${task._count.comments} comment(s)`}
+                          >
+                            💬 {task._count.comments}
+                          </span>
+                        )}
+                        {task.assignee && (
+                          <span
+                            className="assignee-avatar"
+                            title={
+                              task.assignee.name ??
+                              task.assignee.email ??
+                              "Assigned"
+                            }
+                          >
+                            {task.assignee.name?.[0]?.toUpperCase() ?? "?"}
+                          </span>
+                        )}
+                      </div>
+                      <span
+                        className="task-actions"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        GH
-                      </a>
-                    )}
-                    {task._count.comments > 0 && (
-                      <span
-                        className="comment-badge"
-                        title={`${task._count.comments} comment(s)`}
-                      >
-                        💬 {task._count.comments}
+                        {idx > 0 && (
+                          <button
+                            className="move-btn"
+                            onClick={() =>
+                              moveTask(task.id, statusOrder[idx - 1])
+                            }
+                            title={`Move to ${statusOrder[idx - 1].replace("_", " ")}`}
+                          >
+                            &larr;
+                          </button>
+                        )}
+                        {idx < statusOrder.length - 1 && (
+                          <button
+                            className="move-btn"
+                            onClick={() =>
+                              moveTask(task.id, statusOrder[idx + 1])
+                            }
+                            title={`Move to ${statusOrder[idx + 1].replace("_", " ")}`}
+                          >
+                            &rarr;
+                          </button>
+                        )}
+                        <button
+                          className="delete-btn"
+                          onClick={() => deleteTask(task.id)}
+                          title="Delete task"
+                        >
+                          &times;
+                        </button>
                       </span>
-                    )}
-                    {task.assignee && (
-                      <span
-                        className="assignee-avatar"
-                        title={
-                          task.assignee.name ??
-                          task.assignee.email ??
-                          "Assigned"
-                        }
-                      >
-                        {task.assignee.name?.[0]?.toUpperCase() ?? "?"}
-                      </span>
-                    )}
-                    <span
-                      className="task-actions"
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+
+        {/* COMPLETED TASKS LOG */}
+        <div className="completed-section">
+          <button
+            className="completed-toggle"
+            onClick={() => setShowCompleted((v) => !v)}
+          >
+            Completed ({completedTasks.length})
+            <span className={`toggle-arrow ${showCompleted ? "open" : ""}`}>
+              &#9662;
+            </span>
+          </button>
+
+          {showCompleted && (
+            <div className="completed-list">
+              {completedTasks.length === 0 ? (
+                <p className="completed-empty">No completed tasks yet.</p>
+              ) : (
+                completedTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className="completed-item"
+                    onClick={() => setSelectedTaskId(task.id)}
+                  >
+                    <div className="completed-item-content">
+                      <span className="completed-check">&#10003;</span>
+                      <span className="completed-title">{task.title}</span>
+                    </div>
+                    <div
+                      className="completed-item-actions"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      {idx > 0 && (
-                        <button
-                          className="move-btn"
-                          onClick={() =>
-                            moveTask(task.id, statusOrder[idx - 1])
-                          }
-                          title={`Move to ${statusOrder[idx - 1].replace("_", " ")}`}
+                      {task.githubIssueUrl && (
+                        <a
+                          href={task.githubIssueUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="gh-issue-link"
+                          title="View on GitHub"
                         >
-                          &larr;
-                        </button>
+                          GH
+                        </a>
                       )}
-                      {idx < statusOrder.length - 1 && (
-                        <button
-                          className="move-btn"
-                          onClick={() =>
-                            moveTask(task.id, statusOrder[idx + 1])
-                          }
-                          title={`Move to ${statusOrder[idx + 1].replace("_", " ")}`}
-                        >
-                          &rarr;
-                        </button>
-                      )}
+                      <button
+                        className="move-btn"
+                        onClick={() => moveTask(task.id, "TODO")}
+                        title="Re-open as TODO"
+                      >
+                        Reopen
+                      </button>
                       <button
                         className="delete-btn"
                         onClick={() => deleteTask(task.id)}
@@ -357,13 +468,13 @@ export default function ProjectPage() {
                       >
                         &times;
                       </button>
-                    </span>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        ))}
+                ))
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* GITHUB PANEL */}
@@ -371,18 +482,18 @@ export default function ProjectPage() {
         <h5>GitHub</h5>
 
         {!github?.repository ? (
-          <p>No repository connected</p>
+          <p className="github-empty">No repository connected</p>
         ) : (
           <>
-            <p>
-              <strong>{github.repository.name}</strong>
-            </p>
-            <p>⭐ {github.repository.stars}</p>
-            <p>🍴 {github.repository.forks}</p>
-            <p>🔀 {github.openPullRequests} PRs</p>
+            <div className="github-repo-name">{github.repository.name}</div>
+            <div className="github-stats">
+              <span title="Stars">⭐ {github.repository.stars}</span>
+              <span title="Forks">🍴 {github.repository.forks}</span>
+              <span title="Open PRs">🔀 {github.openPullRequests}</span>
+            </div>
 
             {github.latestCommit && (
-              <div>
+              <div className="github-commit">
                 <small>{github.latestCommit.message}</small>
               </div>
             )}
