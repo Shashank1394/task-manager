@@ -385,17 +385,18 @@ export default function ProjectPage() {
                             &larr;
                           </button>
                         )}
-                        {idx < statusOrder.length - 1 && (
-                          <button
-                            className="move-btn"
-                            onClick={() =>
-                              moveTask(task.id, statusOrder[idx + 1])
-                            }
-                            title={`Move to ${statusOrder[idx + 1].replace("_", " ")}`}
-                          >
-                            &rarr;
-                          </button>
-                        )}
+                        {idx < statusOrder.length - 1 &&
+                          statusOrder[idx + 1] !== "DONE" && (
+                            <button
+                              className="move-btn"
+                              onClick={() =>
+                                moveTask(task.id, statusOrder[idx + 1])
+                              }
+                              title={`Move to ${statusOrder[idx + 1].replace("_", " ")}`}
+                            >
+                              &rarr;
+                            </button>
+                          )}
                         <button
                           className="delete-btn"
                           onClick={() => deleteTask(task.id)}
