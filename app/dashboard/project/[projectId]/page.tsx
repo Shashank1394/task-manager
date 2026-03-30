@@ -16,6 +16,7 @@ type Task = {
     image: string | null;
   } | null;
   _count: { comments: number };
+  githubIssueUrl: string | null;
 };
 
 type GitHubStatus = {
@@ -33,12 +34,21 @@ type GitHubStatus = {
   openPullRequests: number;
 };
 
+type SyncStatus = {
+  syncedIssues: number;
+  lastSyncedAt: string | null;
+  lastAction: string | null;
+  lastDetails: { imported: number; updated: number; total: number } | null;
+};
+
 export default function ProjectPage() {
   const { projectId } = useParams();
   const projectIdParam = Array.isArray(projectId) ? projectId[0] : projectId;
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [github, setGithub] = useState<GitHubStatus | null>(null);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const [newTask, setNewTask] = useState<{ [key: string]: string }>({});
@@ -72,11 +82,15 @@ export default function ProjectPage() {
       fetchJson<{ board: { id: string } }>(`/api/projects/${projectIdParam}`),
       fetchJson<Task[]>(`/api/projects/${projectIdParam}/tasks`),
       fetchJson<GitHubStatus>(`/api/projects/${projectIdParam}/github-status`),
+      fetchJson<SyncStatus>(
+        `/api/projects/${projectIdParam}/github-sync/status`,
+      ),
     ])
-      .then(([projectData, taskData, githubData]) => {
+      .then(([projectData, taskData, githubData, syncData]) => {
         setBoardId(projectData.board.id);
         setTasks(taskData);
         setGithub(githubData);
+        setSyncStatus(syncData);
       })
       .catch((error) => {
         console.error("Failed to load project page data:", error);
@@ -125,6 +139,20 @@ export default function ProjectPage() {
     );
   };
 
+  const deleteTask = async (taskId: string) => {
+    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+
+    const res = await fetch(`/api/tasks/${taskId}`, { method: "DELETE" });
+    if (!res.ok) {
+      // Revert on failure — re-fetch tasks
+      const taskData = await fetchJson<Task[]>(
+        `/api/projects/${projectIdParam}/tasks`,
+      );
+      setTasks(taskData);
+      console.error("Failed to delete task");
+    }
+  };
+
   const moveTask = async (taskId: string, newStatus: Task["status"]) => {
     // Optimistic update
     setTasks((prev) =>
@@ -155,6 +183,38 @@ export default function ProjectPage() {
         ),
       );
       console.error("Failed to move task:", await res.text());
+    }
+  };
+
+  const importGitHubIssues = async () => {
+    if (syncing) return;
+    setSyncing(true);
+
+    try {
+      const res = await fetch(
+        `/api/projects/${projectIdParam}/github-sync/issues`,
+        { method: "POST" },
+      );
+
+      if (!res.ok) {
+        const data = await res.json();
+        console.error("Import failed:", data.error);
+        return;
+      }
+
+      // Refresh tasks and sync status
+      const [taskData, syncData] = await Promise.all([
+        fetchJson<Task[]>(`/api/projects/${projectIdParam}/tasks`),
+        fetchJson<SyncStatus>(
+          `/api/projects/${projectIdParam}/github-sync/status`,
+        ),
+      ]);
+      setTasks(taskData);
+      setSyncStatus(syncData);
+    } catch (error) {
+      console.error("Import failed:", error);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -232,6 +292,18 @@ export default function ProjectPage() {
                     <span className="task-title">{task.title}</span>
                   </div>
                   <div className="task-card-meta">
+                    {task.githubIssueUrl && (
+                      <a
+                        href={task.githubIssueUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="gh-issue-link"
+                        title="View on GitHub"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        GH
+                      </a>
+                    )}
                     {task._count.comments > 0 && (
                       <span
                         className="comment-badge"
@@ -278,6 +350,13 @@ export default function ProjectPage() {
                           &rarr;
                         </button>
                       )}
+                      <button
+                        className="delete-btn"
+                        onClick={() => deleteTask(task.id)}
+                        title="Delete task"
+                      >
+                        &times;
+                      </button>
                     </span>
                   </div>
                 </div>
@@ -307,6 +386,40 @@ export default function ProjectPage() {
                 <small>{github.latestCommit.message}</small>
               </div>
             )}
+
+            {/* IMPORT ISSUES */}
+            <div className="github-sync-section">
+              <button
+                className="sync-btn"
+                onClick={importGitHubIssues}
+                disabled={syncing}
+              >
+                {syncing ? "Syncing..." : "Import Issues"}
+              </button>
+
+              {syncStatus && syncStatus.syncedIssues > 0 && (
+                <div className="sync-status">
+                  <span className="sync-count">
+                    {syncStatus.syncedIssues} issue
+                    {syncStatus.syncedIssues !== 1 ? "s" : ""} synced
+                  </span>
+                  {syncStatus.lastSyncedAt && (
+                    <span className="sync-time">
+                      Last sync:{" "}
+                      {new Date(syncStatus.lastSyncedAt).toLocaleDateString(
+                        "en-US",
+                        {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        },
+                      )}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </>
         )}
       </div>

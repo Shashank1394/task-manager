@@ -36,6 +36,7 @@ type TaskDetail = {
   createdAt: string;
   comments: Comment[];
   board: { project: { organizationId: string } };
+  githubIssueUrl: string | null;
 };
 
 type Props = {
@@ -48,6 +49,7 @@ type Props = {
     priority: "LOW" | "MEDIUM" | "HIGH";
     assignee: TaskDetail["assignee"];
     _count: { comments: number };
+    githubIssueUrl: string | null;
   }) => void;
 };
 
@@ -108,6 +110,7 @@ export default function TaskDetailPanel({
             : task.priority,
         assignee: updated.assignee ?? task.assignee,
         _count: { comments: task.comments.length },
+        githubIssueUrl: task.githubIssueUrl,
       });
     }
     setSaving(false);
@@ -136,6 +139,7 @@ export default function TaskDetailPanel({
           priority: task.priority,
           assignee: task.assignee,
           _count: { comments: task.comments.length + 1 },
+          githubIssueUrl: task.githubIssueUrl,
         });
       }
     }
@@ -256,6 +260,21 @@ export default function TaskDetailPanel({
             <div className="field-meta">
               Created {formatDate(task.createdAt)}
             </div>
+
+            {/* GitHub Issue Link */}
+            {task.githubIssueUrl && (
+              <div className="field-group">
+                <label>GitHub Issue</label>
+                <a
+                  href={task.githubIssueUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="gh-issue-panel-link"
+                >
+                  {task.githubIssueUrl.replace("https://github.com/", "")}
+                </a>
+              </div>
+            )}
 
             {saving && <div className="field-meta">Saving...</div>}
 

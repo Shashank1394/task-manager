@@ -108,3 +108,24 @@ export async function PATCH(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 }
+
+export async function DELETE(
+  _req: Request,
+  context: { params: Promise<{ taskId: string }> },
+) {
+  try {
+    const { taskId } = await context.params;
+    const session = await requireAuth();
+
+    const task = await authorizeTask(taskId, session.user.id);
+    if (!task) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    await prisma.task.delete({ where: { id: taskId } });
+
+    return NextResponse.json({ success: true });
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+}
