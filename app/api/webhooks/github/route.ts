@@ -118,7 +118,6 @@ export async function POST(req: Request) {
           payload as IssueEventPayload,
           project.id,
           project.board?.id,
-          validTaskIds,
         );
         action = "WEBHOOK_RECEIVED";
         details = { ...details, subtype: "issues" };
@@ -220,7 +219,6 @@ async function handleIssueEvent(
   payload: IssueEventPayload,
   projectId: string,
   boardId: string | undefined,
-  validTaskIds: Set<string>,
 ) {
   const { action, issue } = payload;
 
