@@ -661,6 +661,32 @@
   }
 }
 
+.sync-btn-primary {
+  font-size: 0.85rem;
+}
+
+.sync-btn-sm {
+  font-size: 0.75rem;
+  padding: 0.35rem 0.5rem;
+  background: var(--bg-muted);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+
+  &:hover:not(:disabled) {
+    background: var(--bg-primary);
+    opacity: 1;
+  }
+}
+
+.sync-btn-row {
+  display: flex;
+  gap: 0.35rem;
+
+  .sync-btn {
+    flex: 1;
+  }
+}
+
 .sync-status {
   display: flex;
   flex-direction: column;
@@ -699,6 +725,173 @@
 
   &:hover {
     text-decoration: underline;
+  }
+}
+
+/* PANEL TABS */
+
+.panel-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  padding: 0 1.25rem;
+  gap: 0;
+}
+
+.panel-tab {
+  padding: 0.6rem 1rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+
+  &:hover {
+    color: var(--text-primary);
+  }
+
+  &.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    font-weight: 600;
+  }
+}
+
+.tab-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 9px;
+  padding: 0.05rem 0.4rem;
+  min-width: 18px;
+  text-align: center;
+  line-height: 1.3;
+}
+
+/* GITHUB SECTION IN PANEL */
+
+.gh-section {
+  margin-bottom: 0.75rem;
+
+  h5 {
+    margin: 0 0 0.5rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+}
+
+.gh-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.gh-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 0.3rem;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  text-decoration: none;
+  color: var(--text-primary);
+  transition: border-color 0.15s ease;
+
+  &:hover {
+    border-color: var(--text-secondary);
+  }
+}
+
+.gh-item-icon {
+  flex-shrink: 0;
+  font-size: 0.9rem;
+  margin-top: 0.1rem;
+}
+
+.gh-pr-open {
+  color: #2ea043;
+}
+
+.gh-pr-merged {
+  color: #8957e5;
+}
+
+.gh-pr-closed {
+  color: #e03131;
+}
+
+.gh-issue-icon {
+  color: #2ea043;
+}
+
+.gh-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.gh-item-title {
+  font-size: 0.85rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gh-item-meta {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.gh-sha {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.2rem;
+  background: var(--bg-muted);
+  color: var(--accent);
+  margin-top: 0.05rem;
+}
+
+.gh-empty {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.gh-empty-state {
+  text-align: center;
+  padding: 1.5rem 0;
+
+  p {
+    margin: 0 0 0.5rem;
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+  }
+}
+
+.gh-empty-hint {
+  font-size: 0.8rem;
+
+  code {
+    font-size: 0.78rem;
+    padding: 0.1rem 0.3rem;
+    border-radius: 0.2rem;
+    background: var(--bg-muted);
+    color: var(--accent);
   }
 }
 

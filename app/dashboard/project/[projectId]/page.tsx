@@ -49,6 +49,8 @@ export default function ProjectPage() {
   const [github, setGithub] = useState<GitHubStatus | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [syncingPRs, setSyncingPRs] = useState(false);
+  const [syncingCommits, setSyncingCommits] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const [newTask, setNewTask] = useState<{ [key: string]: string }>({});
@@ -239,6 +241,64 @@ export default function ProjectPage() {
     } finally {
       setSyncing(false);
     }
+  };
+
+  const syncPullRequests = async () => {
+    if (syncingPRs) return;
+    setSyncingPRs(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${projectIdParam}/github-sync/pulls`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        const data = await res.json();
+        console.error("PR sync failed:", data.error);
+        return;
+      }
+      const [taskData, syncData] = await Promise.all([
+        fetchJson<Task[]>(`/api/projects/${projectIdParam}/tasks`),
+        fetchJson<SyncStatus>(
+          `/api/projects/${projectIdParam}/github-sync/status`,
+        ),
+      ]);
+      setTasks(taskData);
+      setSyncStatus(syncData);
+    } catch (error) {
+      console.error("PR sync failed:", error);
+    } finally {
+      setSyncingPRs(false);
+    }
+  };
+
+  const syncCommits = async () => {
+    if (syncingCommits) return;
+    setSyncingCommits(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${projectIdParam}/github-sync/commits`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        const data = await res.json();
+        console.error("Commit sync failed:", data.error);
+        return;
+      }
+      const syncData = await fetchJson<SyncStatus>(
+        `/api/projects/${projectIdParam}/github-sync/status`,
+      );
+      setSyncStatus(syncData);
+    } catch (error) {
+      console.error("Commit sync failed:", error);
+    } finally {
+      setSyncingCommits(false);
+    }
+  };
+
+  const syncAll = async () => {
+    await importGitHubIssues();
+    await syncPullRequests();
+    await syncCommits();
   };
 
   if (loading) return <p>Loading project...</p>;
@@ -499,15 +559,40 @@ export default function ProjectPage() {
               </div>
             )}
 
-            {/* IMPORT ISSUES */}
+            {/* SYNC ACTIONS */}
             <div className="github-sync-section">
               <button
-                className="sync-btn"
-                onClick={importGitHubIssues}
-                disabled={syncing}
+                className="sync-btn sync-btn-primary"
+                onClick={syncAll}
+                disabled={syncing || syncingPRs || syncingCommits}
               >
-                {syncing ? "Syncing..." : "Import Issues"}
+                {syncing || syncingPRs || syncingCommits
+                  ? "Syncing..."
+                  : "Sync All"}
               </button>
+              <div className="sync-btn-row">
+                <button
+                  className="sync-btn sync-btn-sm"
+                  onClick={importGitHubIssues}
+                  disabled={syncing}
+                >
+                  {syncing ? "..." : "Issues"}
+                </button>
+                <button
+                  className="sync-btn sync-btn-sm"
+                  onClick={syncPullRequests}
+                  disabled={syncingPRs}
+                >
+                  {syncingPRs ? "..." : "PRs"}
+                </button>
+                <button
+                  className="sync-btn sync-btn-sm"
+                  onClick={syncCommits}
+                  disabled={syncingCommits}
+                >
+                  {syncingCommits ? "..." : "Commits"}
+                </button>
+              </div>
 
               {syncStatus && syncStatus.syncedIssues > 0 && (
                 <div className="sync-status">

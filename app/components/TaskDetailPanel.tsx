@@ -39,6 +39,32 @@ type TaskDetail = {
   githubIssueUrl: string | null;
 };
 
+type GitHubTaskData = {
+  issue: {
+    number: number;
+    url: string | null;
+    syncDirection: string;
+    lastSyncedAt: string;
+  } | null;
+  pullRequests: {
+    id: string;
+    githubPrNumber: number;
+    title: string;
+    state: string;
+    url: string;
+    authorLogin: string | null;
+    createdAt: string;
+  }[];
+  commits: {
+    id: string;
+    sha: string;
+    message: string;
+    authorName: string | null;
+    authorDate: string | null;
+    url: string;
+  }[];
+};
+
 type Props = {
   taskId: string;
   onClose: () => void;
@@ -63,6 +89,8 @@ export default function TaskDetailPanel({
   const [loading, setLoading] = useState(true);
   const [commentText, setCommentText] = useState("");
   const [saving, setSaving] = useState(false);
+  const [ghData, setGhData] = useState<GitHubTaskData | null>(null);
+  const [activeTab, setActiveTab] = useState<"details" | "github">("details");
 
   const loadTask = useCallback(async () => {
     try {
@@ -73,8 +101,12 @@ export default function TaskDetailPanel({
 
       // Load org members for assignee dropdown
       const orgId = data.board.project.organizationId;
-      const mRes = await fetch(`/api/organizations/${orgId}/members`);
+      const [mRes, ghRes] = await Promise.all([
+        fetch(`/api/organizations/${orgId}/members`),
+        fetch(`/api/tasks/${taskId}/github`),
+      ]);
       if (mRes.ok) setMembers(await mRes.json());
+      if (ghRes.ok) setGhData(await ghRes.json());
     } catch (e) {
       console.error("Failed to load task:", e);
     } finally {
@@ -169,11 +201,37 @@ export default function TaskDetailPanel({
           </button>
         </div>
 
+        {/* Tabs */}
+        <div className="panel-tabs">
+          <button
+            className={`panel-tab ${activeTab === "details" ? "active" : ""}`}
+            onClick={() => setActiveTab("details")}
+          >
+            Details
+          </button>
+          <button
+            className={`panel-tab ${activeTab === "github" ? "active" : ""}`}
+            onClick={() => setActiveTab("github")}
+          >
+            GitHub
+            {ghData &&
+              (ghData.pullRequests.length > 0 ||
+                ghData.commits.length > 0 ||
+                ghData.issue) && (
+                <span className="tab-badge">
+                  {ghData.pullRequests.length +
+                    ghData.commits.length +
+                    (ghData.issue ? 1 : 0)}
+                </span>
+              )}
+          </button>
+        </div>
+
         {loading || !task ? (
           <div className="panel-body">
             <p>Loading...</p>
           </div>
-        ) : (
+        ) : activeTab === "details" ? (
           <div className="panel-body">
             {/* Title */}
             <div className="field-group">
@@ -321,6 +379,107 @@ export default function TaskDetailPanel({
                 </button>
               </div>
             </div>
+          </div>
+        ) : (
+          <div className="panel-body">
+            {/* GitHub Issue */}
+            {ghData?.issue && (
+              <div className="gh-section">
+                <h5>Linked Issue</h5>
+                <a
+                  href={ghData.issue.url ?? "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="gh-item"
+                >
+                  <span className="gh-item-icon gh-issue-icon">●</span>
+                  <span className="gh-item-text">#{ghData.issue.number}</span>
+                </a>
+              </div>
+            )}
+
+            {/* Pull Requests */}
+            <div className="gh-section">
+              <h5>Pull Requests ({ghData?.pullRequests.length ?? 0})</h5>
+              {ghData?.pullRequests.length === 0 ? (
+                <p className="gh-empty">No linked pull requests</p>
+              ) : (
+                <div className="gh-list">
+                  {ghData?.pullRequests.map((pr) => (
+                    <a
+                      key={pr.id}
+                      href={pr.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="gh-item"
+                    >
+                      <span
+                        className={`gh-item-icon gh-pr-${pr.state}`}
+                        title={pr.state}
+                      >
+                        {pr.state === "merged"
+                          ? "⏣"
+                          : pr.state === "open"
+                            ? "◎"
+                            : "○"}
+                      </span>
+                      <span className="gh-item-text">
+                        <span className="gh-item-title">
+                          #{pr.githubPrNumber} {pr.title}
+                        </span>
+                        <span className="gh-item-meta">
+                          {pr.authorLogin && `by ${pr.authorLogin} · `}
+                          {pr.state}
+                        </span>
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Commits */}
+            <div className="gh-section">
+              <h5>Commits ({ghData?.commits.length ?? 0})</h5>
+              {ghData?.commits.length === 0 ? (
+                <p className="gh-empty">No linked commits</p>
+              ) : (
+                <div className="gh-list">
+                  {ghData?.commits.map((c) => (
+                    <a
+                      key={c.id}
+                      href={c.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="gh-item"
+                    >
+                      <code className="gh-sha">{c.sha.slice(0, 7)}</code>
+                      <span className="gh-item-text">
+                        <span className="gh-item-title">
+                          {c.message.split("\n")[0]}
+                        </span>
+                        <span className="gh-item-meta">
+                          {c.authorName && `${c.authorName}`}
+                          {c.authorDate && ` · ${formatDate(c.authorDate)}`}
+                        </span>
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {!ghData?.issue &&
+              ghData?.pullRequests.length === 0 &&
+              ghData?.commits.length === 0 && (
+                <div className="gh-empty-state">
+                  <p>No GitHub data linked to this task.</p>
+                  <p className="gh-empty-hint">
+                    Use <code>TASK-{task.id}</code> in PR titles, branch names,
+                    or commit messages to auto-link.
+                  </p>
+                </div>
+              )}
           </div>
         )}
       </div>
