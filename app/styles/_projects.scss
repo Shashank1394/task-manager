@@ -920,3 +920,66 @@
     opacity: 0.9;
   }
 }
+
+// ─── Webhook Section ─────────────────────────────────────────
+.webhook-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color, #e0e0e0);
+}
+
+.webhook-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.webhook-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-primary, #1a1a1a);
+}
+
+.webhook-status {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+
+  &.active {
+    background: rgba(56, 161, 105, 0.15);
+    color: #38a169;
+  }
+
+  &.inactive {
+    background: rgba(160, 160, 160, 0.15);
+    color: #888;
+  }
+}
+
+.webhook-btn-setup {
+  width: 100%;
+  margin-top: 0.25rem;
+}
+
+.webhook-btn-remove {
+  width: 100%;
+  margin-top: 0.25rem;
+  background: var(--bg-secondary, #f0f0f0);
+  color: var(--text-secondary, #666);
+  border: 1px solid var(--border-color, #e0e0e0);
+
+  &:hover:not(:disabled) {
+    background: rgba(229, 62, 62, 0.1);
+    color: #e53e3e;
+    border-color: rgba(229, 62, 62, 0.3);
+  }
+}
+
+.webhook-hint {
+  font-size: 0.7rem;
+  color: var(--text-muted, #999);
+  margin: 0.4rem 0 0;
+  line-height: 1.4;
+}

@@ -22,7 +22,7 @@ export const authOptions: AuthOptions = {
       clientSecret: process.env.GITHUB_CLIENT_SECRET!,
       authorization: {
         params: {
-          scope: "read:user user:email repo read:org",
+          scope: "read:user user:email repo read:org admin:repo_hook",
         },
       },
     }),
@@ -33,6 +33,24 @@ export const authOptions: AuthOptions = {
   },
 
   callbacks: {
+    async signIn({ account }) {
+      // Update stored token on every sign-in so new scopes take effect
+      if (account?.provider === "github" && account.access_token) {
+        await prisma.account.updateMany({
+          where: {
+            provider: account.provider,
+            providerAccountId: account.providerAccountId,
+          },
+          data: {
+            access_token: account.access_token,
+            refresh_token: account.refresh_token,
+            expires_at: account.expires_at,
+            scope: account.scope,
+          },
+        });
+      }
+      return true;
+    },
     session({ session, token }) {
       if (session.user && token.sub) {
         session.user.id = token.sub;

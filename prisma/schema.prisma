@@ -54,6 +54,7 @@ enum GitHubSyncAction {
   COMMIT_LINKED
   BRANCH_CREATED
   WEBHOOK_RECEIVED
+  WEBHOOK_SETUP
 }
 
 // MODELS
@@ -147,6 +148,9 @@ model Project {
   repoProvider   RepoProvider?
   repoOwner      String?
   repoName       String?
+
+  webhookSecret  String?
+  webhookId      Int?
 
   githubIssues   GitHubIssue[]
   githubPRs      GitHubPR[]

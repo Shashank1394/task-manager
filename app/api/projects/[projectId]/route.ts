@@ -42,6 +42,7 @@ export async function GET(
       description: project.description,
       organizationId: project.organizationId,
       board: project.board,
+      webhookActive: !!project.webhookId,
     });
   } catch (error) {
     console.error(error);

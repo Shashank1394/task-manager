@@ -52,6 +52,8 @@ export default function ProjectPage() {
   const [syncingPRs, setSyncingPRs] = useState(false);
   const [syncingCommits, setSyncingCommits] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [webhookActive, setWebhookActive] = useState(false);
+  const [settingUpWebhook, setSettingUpWebhook] = useState(false);
 
   const [newTask, setNewTask] = useState<{ [key: string]: string }>({});
   const [boardId, setBoardId] = useState<string | null>(null);
@@ -82,7 +84,9 @@ export default function ProjectPage() {
     }
 
     Promise.all([
-      fetchJson<{ board: { id: string } }>(`/api/projects/${projectIdParam}`),
+      fetchJson<{ board: { id: string }; webhookActive: boolean }>(
+        `/api/projects/${projectIdParam}`,
+      ),
       fetchJson<Task[]>(`/api/projects/${projectIdParam}/tasks`),
       fetchJson<GitHubStatus>(`/api/projects/${projectIdParam}/github-status`),
       fetchJson<SyncStatus>(
@@ -91,6 +95,7 @@ export default function ProjectPage() {
     ])
       .then(([projectData, taskData, githubData, syncData]) => {
         setBoardId(projectData.board.id);
+        setWebhookActive(projectData.webhookActive);
         setTasks(taskData);
         setGithub(githubData);
         setSyncStatus(syncData);
@@ -292,6 +297,67 @@ export default function ProjectPage() {
       console.error("Commit sync failed:", error);
     } finally {
       setSyncingCommits(false);
+    }
+  };
+
+  const setupWebhook = async () => {
+    if (settingUpWebhook) return;
+
+    let webhookUrl: string | undefined;
+    if (window.location.hostname === "localhost") {
+      const url = prompt(
+        "GitHub can't reach localhost. Enter a public URL (e.g. from ngrok or smee.io):\n\n" +
+          "Run: ngrok http 3000\nThen paste the https URL here.\n\n" +
+          "The path /api/webhooks/github will be appended automatically.",
+      );
+      if (!url) return;
+      webhookUrl = url.replace(/\/+$/, "") + "/api/webhooks/github";
+    }
+
+    setSettingUpWebhook(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${projectIdParam}/github-sync/setup-webhook`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(webhookUrl ? { webhookUrl } : {}),
+        },
+      );
+      if (!res.ok) {
+        const data = await res.json();
+        console.error("Webhook setup failed:", data.error);
+        if (data.hint) {
+          alert(data.hint);
+        }
+        return;
+      }
+      setWebhookActive(true);
+    } catch (error) {
+      console.error("Webhook setup failed:", error);
+    } finally {
+      setSettingUpWebhook(false);
+    }
+  };
+
+  const removeWebhook = async () => {
+    if (settingUpWebhook) return;
+    setSettingUpWebhook(true);
+    try {
+      const res = await fetch(
+        `/api/projects/${projectIdParam}/github-sync/setup-webhook`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) {
+        const data = await res.json();
+        console.error("Webhook removal failed:", data.error);
+        return;
+      }
+      setWebhookActive(false);
+    } catch (error) {
+      console.error("Webhook removal failed:", error);
+    } finally {
+      setSettingUpWebhook(false);
     }
   };
 
@@ -616,6 +682,40 @@ export default function ProjectPage() {
                   )}
                 </div>
               )}
+            </div>
+
+            {/* WEBHOOK STATUS */}
+            <div className="webhook-section">
+              <div className="webhook-header">
+                <span className="webhook-label">Real-time Sync</span>
+                <span
+                  className={`webhook-status ${webhookActive ? "active" : "inactive"}`}
+                >
+                  {webhookActive ? "Active" : "Off"}
+                </span>
+              </div>
+              {webhookActive ? (
+                <button
+                  className="sync-btn sync-btn-sm webhook-btn-remove"
+                  onClick={removeWebhook}
+                  disabled={settingUpWebhook}
+                >
+                  {settingUpWebhook ? "..." : "Disable Webhook"}
+                </button>
+              ) : (
+                <button
+                  className="sync-btn sync-btn-primary webhook-btn-setup"
+                  onClick={setupWebhook}
+                  disabled={settingUpWebhook}
+                >
+                  {settingUpWebhook ? "Setting up..." : "Enable Webhooks"}
+                </button>
+              )}
+              <p className="webhook-hint">
+                {webhookActive
+                  ? "GitHub events sync automatically."
+                  : "Enable to auto-sync issues, PRs, and commits in real-time."}
+              </p>
             </div>
           </>
         )}
