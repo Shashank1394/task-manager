@@ -8,8 +8,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Task Manager",
-  description: "DevOps-style project management platform",
+  title: "DevPilot",
+  description:
+    "A unified developer portal for team collaboration, task orchestration, and GitHub-driven project intelligence",
 };
 
 export default function RootLayout({

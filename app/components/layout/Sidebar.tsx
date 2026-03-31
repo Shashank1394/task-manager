@@ -5,7 +5,7 @@ import Link from "next/link";
 export default function Sidebar() {
   return (
     <div className="sidebar">
-      <div className="sidebar__logo">TaskManager</div>
+      <div className="sidebar__logo">DevPilot</div>
 
       <nav className="sidebar__nav">
         <Link href="/dashboard">Dashboard</Link>
