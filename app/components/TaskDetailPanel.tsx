@@ -91,6 +91,9 @@ export default function TaskDetailPanel({
   const [saving, setSaving] = useState(false);
   const [ghData, setGhData] = useState<GitHubTaskData | null>(null);
   const [activeTab, setActiveTab] = useState<"details" | "github">("details");
+  const [creatingBranch, setCreatingBranch] = useState(false);
+  const [creatingIssue, setCreatingIssue] = useState(false);
+  const [branchUrl, setBranchUrl] = useState<string | null>(null);
 
   const loadTask = useCallback(async () => {
     try {
@@ -174,6 +177,57 @@ export default function TaskDetailPanel({
           githubIssueUrl: task.githubIssueUrl,
         });
       }
+    }
+  };
+
+  const createBranch = async () => {
+    if (creatingBranch) return;
+    setCreatingBranch(true);
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/github/create-branch`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 409) {
+          setBranchUrl(`https://github.com/${data.branchName ? "" : ""}`);
+          alert("Branch already exists!");
+        } else {
+          console.error("Create branch failed:", data.error);
+        }
+        return;
+      }
+      setBranchUrl(data.url);
+    } catch (error) {
+      console.error("Create branch failed:", error);
+    } finally {
+      setCreatingBranch(false);
+    }
+  };
+
+  const createIssue = async () => {
+    if (creatingIssue) return;
+    setCreatingIssue(true);
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/github/create-issue`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 409) {
+          alert("Task already has a linked GitHub issue.");
+        } else {
+          console.error("Create issue failed:", data.error);
+        }
+        return;
+      }
+      // Refresh GitHub data
+      const ghRes = await fetch(`/api/tasks/${taskId}/github`);
+      if (ghRes.ok) setGhData(await ghRes.json());
+    } catch (error) {
+      console.error("Create issue failed:", error);
+    } finally {
+      setCreatingIssue(false);
     }
   };
 
@@ -382,6 +436,36 @@ export default function TaskDetailPanel({
           </div>
         ) : (
           <div className="panel-body">
+            {/* GitHub Actions */}
+            <div className="gh-actions">
+              {!ghData?.issue && (
+                <button
+                  className="gh-action-btn"
+                  onClick={createIssue}
+                  disabled={creatingIssue}
+                >
+                  {creatingIssue ? "Creating..." : "Create GitHub Issue"}
+                </button>
+              )}
+              <button
+                className="gh-action-btn gh-action-secondary"
+                onClick={createBranch}
+                disabled={creatingBranch}
+              >
+                {creatingBranch ? "Creating..." : "Create Branch"}
+              </button>
+              {branchUrl && (
+                <a
+                  href={branchUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="gh-branch-link"
+                >
+                  View Branch →
+                </a>
+              )}
+            </div>
+
             {/* GitHub Issue */}
             {ghData?.issue && (
               <div className="gh-section">

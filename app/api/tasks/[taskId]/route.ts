@@ -103,6 +103,11 @@ export async function PATCH(
       },
     });
 
+    // Auto-close/reopen linked GitHub issue when status changes
+    if (body.status !== undefined) {
+      await syncGitHubIssueState(taskId, body.status, session.user.id);
+    }
+
     return NextResponse.json(updated);
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -127,5 +132,52 @@ export async function DELETE(
     return NextResponse.json({ success: true });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+}
+
+/**
+ * When a task's status changes, update the linked GitHub issue state.
+ * DONE → close issue, TODO/IN_PROGRESS → reopen issue.
+ * Runs as fire-and-forget (errors are logged, not surfaced to the user).
+ */
+async function syncGitHubIssueState(
+  taskId: string,
+  newStatus: string,
+  userId: string,
+) {
+  try {
+    const ghIssue = await prisma.gitHubIssue.findUnique({
+      where: { taskId },
+      include: {
+        project: true,
+      },
+    });
+
+    if (!ghIssue || !ghIssue.project.repoOwner || !ghIssue.project.repoName) {
+      return;
+    }
+
+    const githubAccount = await prisma.account.findFirst({
+      where: { userId, provider: "github" },
+    });
+
+    if (!githubAccount?.access_token) return;
+
+    const ghState = newStatus === "DONE" ? "closed" : "open";
+
+    await fetch(
+      `https://api.github.com/repos/${ghIssue.project.repoOwner}/${ghIssue.project.repoName}/issues/${ghIssue.githubIssueNumber}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${githubAccount.access_token}`,
+          Accept: "application/vnd.github+json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ state: ghState }),
+      },
+    );
+  } catch (error) {
+    console.error("Failed to sync GitHub issue state:", error);
   }
 }
