@@ -27,7 +27,7 @@ export default function ThemeToggle() {
 
   return (
     <button className="btn btn-outline-secondary btn-sm" onClick={toggleTheme}>
-      {theme === "light" ? "🌙 Dark" : "☀ Light"}
+      {theme === "light" ? "🌙" : "☀"}
     </button>
   );
 }
