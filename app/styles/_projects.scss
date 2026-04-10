@@ -1089,12 +1089,12 @@
   }
 
   &.gh-action-secondary {
-    background: var(--bg-secondary, #f0f0f0);
-    color: var(--text-primary, #1a1a1a);
-    border: 1px solid var(--border-color, #e0e0e0);
+    background: var(--bg-muted);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
 
     &:hover:not(:disabled) {
-      background: var(--bg-tertiary, #e5e5e5);
+      background: var(--bg-surface);
     }
   }
 }

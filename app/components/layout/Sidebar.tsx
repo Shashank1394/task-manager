@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import Image from "next/image";
 
 type Org = {
@@ -24,6 +24,7 @@ export default function Sidebar() {
     {},
   );
   const [expandedOrgs, setExpandedOrgs] = useState<Set<string>>(new Set());
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   useEffect(() => {
     fetch("/api/organizations")
@@ -126,20 +127,47 @@ export default function Sidebar() {
       </nav>
 
       {session?.user && (
-        <div className="sidebar__user">
-          {session.user.image && (
-            <Image
-              src={session.user.image}
-              alt=""
-              className="sidebar__user-avatar"
-              width={32}
-              height={32}
-            />
+        <div className="sidebar__user-wrapper">
+          {showUserMenu && (
+            <div className="sidebar__user-menu">
+              <div className="sidebar__user-menu-header">
+                <span className="sidebar__user-menu-name">
+                  {session.user.name}
+                </span>
+                <span className="sidebar__user-menu-email">
+                  {session.user.email}
+                </span>
+              </div>
+              <button
+                className="sidebar__user-menu-signout"
+                onClick={() => signOut({ callbackUrl: "/" })}
+              >
+                Sign out
+              </button>
+            </div>
           )}
-          <div className="sidebar__user-info">
-            <span className="sidebar__user-name">{session.user.name}</span>
-            <span className="sidebar__user-email">{session.user.email}</span>
-          </div>
+          <button
+            className="sidebar__user"
+            onClick={() => setShowUserMenu((v) => !v)}
+          >
+            {session.user.image ? (
+              <Image
+                src={session.user.image}
+                alt=""
+                className="sidebar__user-avatar"
+                width={32}
+                height={32}
+              />
+            ) : (
+              <span className="sidebar__user-avatar-fallback">
+                {session.user.name?.[0]?.toUpperCase() ?? "?"}
+              </span>
+            )}
+            <div className="sidebar__user-info">
+              <span className="sidebar__user-name">{session.user.name}</span>
+              <span className="sidebar__user-email">{session.user.email}</span>
+            </div>
+          </button>
         </div>
       )}
     </div>

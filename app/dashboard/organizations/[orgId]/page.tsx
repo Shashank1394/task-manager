@@ -189,6 +189,22 @@ export default function OrgPage() {
     }
   };
 
+  const deleteProject = async (projectId: string, projectName: string) => {
+    if (!confirm(`Delete project "${projectName}"? This cannot be undone.`))
+      return;
+
+    const res = await fetch(`/api/projects/${projectId}`, {
+      method: "DELETE",
+    });
+
+    if (res.ok) {
+      setProjects((prev) => prev.filter((p) => p.id !== projectId));
+    } else {
+      const data = await res.json();
+      alert(data.error);
+    }
+  };
+
   if (loading) return <p>Loading...</p>;
 
   return (
@@ -242,16 +258,26 @@ export default function OrgPage() {
           ) : (
             <div className="org-grid">
               {projects.map((p) => (
-                <Link
-                  href={`/dashboard/project/${p.id}`}
-                  key={p.id}
-                  className="org-card"
-                >
-                  <h5>{p.name}</h5>
-                  <small>
-                    Created {new Date(p.createdAt).toLocaleDateString()}
-                  </small>
-                </Link>
+                <div key={p.id} className="org-card">
+                  <Link
+                    href={`/dashboard/project/${p.id}`}
+                    className="org-card-link"
+                  >
+                    <h5>{p.name}</h5>
+                    <small>
+                      Created {new Date(p.createdAt).toLocaleDateString()}
+                    </small>
+                  </Link>
+                  {isAdmin && (
+                    <button
+                      className="org-card-delete"
+                      onClick={() => deleteProject(p.id, p.name)}
+                      title="Delete project"
+                    >
+                      &times;
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           )}
