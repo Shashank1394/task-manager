@@ -59,14 +59,19 @@ export async function POST(
       );
     }
 
-    // Verify access
+    // Verify access (block clients from posting comments)
     const task = await prisma.task.findFirst({
       where: {
         id: taskId,
         board: {
           project: {
             organization: {
-              members: { some: { userId: session.user.id } },
+              members: {
+                some: {
+                  userId: session.user.id,
+                  role: { not: "CLIENT" },
+                },
+              },
             },
           },
         },

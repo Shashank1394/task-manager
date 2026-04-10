@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/auth-server";
+import { requireAuth, checkClientProjectAccess } from "@/lib/auth-server";
 
 export async function GET(
   _req: Request,
@@ -24,11 +24,13 @@ export async function GET(
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
-    const isMember = project.organization.members.some(
-      (m) => m.userId === session.user.id,
+    const { allowed } = await checkClientProjectAccess(
+      session.user.id,
+      projectId,
+      project.organizationId,
     );
 
-    if (!isMember) {
+    if (!allowed) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

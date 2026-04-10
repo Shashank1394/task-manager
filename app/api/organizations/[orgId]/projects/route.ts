@@ -29,6 +29,11 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // Clients cannot create projects
+  if (membership.role === "CLIENT") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const project = await prisma.project.create({
     data: {
       name,

@@ -19,14 +19,17 @@ export async function POST(
     );
   }
 
-  // Verify board access via project → org membership
+  // Verify board access via project → org membership (exclude clients)
   const board = await prisma.board.findFirst({
     where: {
       id: boardId,
       project: {
         organization: {
           members: {
-            some: { userId: session.user.id },
+            some: {
+              userId: session.user.id,
+              role: { not: "CLIENT" },
+            },
           },
         },
       },

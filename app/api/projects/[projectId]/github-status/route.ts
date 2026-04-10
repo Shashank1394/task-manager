@@ -24,9 +24,9 @@ export async function GET(
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
-    // Check membership
+    // Check membership (exclude clients)
     const isMember = project.organization.members.some(
-      (m) => m.userId === session.user.id,
+      (m) => m.userId === session.user.id && m.role !== "CLIENT",
     );
 
     if (!isMember) {

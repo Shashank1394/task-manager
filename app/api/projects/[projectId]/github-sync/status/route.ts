@@ -22,7 +22,7 @@ export async function GET(
     }
 
     const isMember = project.organization.members.some(
-      (m) => m.userId === session.user.id,
+      (m) => m.userId === session.user.id && m.role !== "CLIENT",
     );
     if (!isMember) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });

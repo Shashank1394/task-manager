@@ -35,9 +35,9 @@ export async function POST(
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
 
-    // Check org membership
+    // Check org membership (exclude clients)
     const isMember = project.organization.members.some(
-      (m) => m.userId === session.user.id,
+      (m) => m.userId === session.user.id && m.role !== "CLIENT",
     );
 
     if (!isMember) {

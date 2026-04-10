@@ -11,9 +11,9 @@ export async function GET() {
     const session = await requireAuth();
     const userId = session.user.id;
 
-    // Get user's orgs
+    // Get user's orgs (exclude orgs where user is CLIENT — they have their own dashboard)
     const memberships = await prisma.organizationMember.findMany({
-      where: { userId },
+      where: { userId, role: { not: "CLIENT" } },
       include: {
         organization: {
           include: {

@@ -21,7 +21,12 @@ export async function POST(
         board: {
           project: {
             organization: {
-              members: { some: { userId: session.user.id } },
+              members: {
+                some: {
+                  userId: session.user.id,
+                  role: { not: "CLIENT" },
+                },
+              },
             },
           },
         },

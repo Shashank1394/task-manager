@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-server";
 import { TaskStatus, TaskPriority } from "@prisma/client";
 
-/** Shared auth check — returns task or error response */
+/** Shared auth check — returns task or null. Blocks CLIENT role. */
 async function authorizeTask(taskId: string, userId: string) {
   const task = await prisma.task.findFirst({
     where: {
@@ -11,7 +11,12 @@ async function authorizeTask(taskId: string, userId: string) {
       board: {
         project: {
           organization: {
-            members: { some: { userId } },
+            members: {
+              some: {
+                userId,
+                role: { not: "CLIENT" },
+              },
+            },
           },
         },
       },
@@ -46,7 +51,7 @@ export async function GET(
         board: {
           select: {
             project: {
-              select: { organizationId: true },
+              select: { id: true, organizationId: true },
             },
           },
         },
@@ -61,6 +66,27 @@ export async function GET(
 
     if (!task) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    // If CLIENT, verify ProjectClient access
+    const membership = await prisma.organizationMember.findFirst({
+      where: {
+        organizationId: task.board.project.organizationId,
+        userId: session.user.id,
+      },
+    });
+    if (membership?.role === "CLIENT") {
+      const clientAccess = await prisma.projectClient.findUnique({
+        where: {
+          userId_projectId: {
+            userId: session.user.id,
+            projectId: task.board.project.id,
+          },
+        },
+      });
+      if (!clientAccess) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
     }
 
     return NextResponse.json(task);
