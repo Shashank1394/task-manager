@@ -61,6 +61,11 @@ export default function ProjectPage() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
 
+  // Filters
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterPriority, setFilterPriority] = useState<string>("ALL");
+  const [filterAssignee, setFilterAssignee] = useState<string>("ALL");
+
   const fetchJson = async <T,>(url: string): Promise<T> => {
     const res = await fetch(url);
     const contentType = res.headers.get("content-type") || "";
@@ -369,15 +374,88 @@ export default function ProjectPage() {
 
   if (loading) return <p>Loading project...</p>;
 
+  // Derive unique assignees for the filter dropdown
+  const assignees = Array.from(
+    new Map(
+      tasks.filter((t) => t.assignee).map((t) => [t.assignee!.id, t.assignee!]),
+    ).values(),
+  );
+
+  // Apply filters
+  const filteredTasks = tasks.filter((t) => {
+    if (
+      searchQuery &&
+      !t.title.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+      return false;
+    if (filterPriority !== "ALL" && t.priority !== filterPriority) return false;
+    if (filterAssignee !== "ALL") {
+      if (filterAssignee === "UNASSIGNED" && t.assignee) return false;
+      if (filterAssignee !== "UNASSIGNED" && t.assignee?.id !== filterAssignee)
+        return false;
+    }
+    return true;
+  });
+
   const boardColumns = {
-    TODO: tasks.filter((t) => t.status === "TODO"),
-    IN_PROGRESS: tasks.filter((t) => t.status === "IN_PROGRESS"),
+    TODO: filteredTasks.filter((t) => t.status === "TODO"),
+    IN_PROGRESS: filteredTasks.filter((t) => t.status === "IN_PROGRESS"),
   };
-  const completedTasks = tasks.filter((t) => t.status === "DONE");
+  const completedTasks = filteredTasks.filter((t) => t.status === "DONE");
+  const hasActiveFilters =
+    searchQuery !== "" || filterPriority !== "ALL" || filterAssignee !== "ALL";
 
   return (
     <div className="project-page">
       <div className="board-area">
+        {/* FILTER BAR */}
+        <div className="filter-bar">
+          <div className="filter-bar-inputs">
+            <input
+              type="text"
+              className="filter-search"
+              placeholder="Search tasks..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            <select
+              className="filter-select"
+              value={filterPriority}
+              onChange={(e) => setFilterPriority(e.target.value)}
+            >
+              <option value="ALL">All Priorities</option>
+              <option value="HIGH">High</option>
+              <option value="MEDIUM">Medium</option>
+              <option value="LOW">Low</option>
+            </select>
+            <select
+              className="filter-select"
+              value={filterAssignee}
+              onChange={(e) => setFilterAssignee(e.target.value)}
+            >
+              <option value="ALL">All Assignees</option>
+              <option value="UNASSIGNED">Unassigned</option>
+              {assignees.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name ?? a.email ?? "Unknown"}
+                </option>
+              ))}
+            </select>
+          </div>
+          {hasActiveFilters && (
+            <button
+              className="filter-clear"
+              onClick={() => {
+                setSearchQuery("");
+                setFilterPriority("ALL");
+                setFilterAssignee("ALL");
+              }}
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+
         {/* BOARD */}
         <div className="board">
           {Object.entries(boardColumns).map(([status, items]) => (

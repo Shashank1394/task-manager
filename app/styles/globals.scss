@@ -4,6 +4,7 @@
 @use "./layout";
 @use "./orgs";
 @use "./projects";
+@use "./dashboard";
 
 body {
   background-color: var(--bg-primary);
