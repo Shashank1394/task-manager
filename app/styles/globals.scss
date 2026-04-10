@@ -5,6 +5,7 @@
 @use "./orgs";
 @use "./projects";
 @use "./dashboard";
+@use "./client";
 
 body {
   background-color: var(--bg-primary);

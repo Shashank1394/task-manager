@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import Image from "next/image";
 import TaskDetailPanel from "@/app/components/TaskDetailPanel";
 
 type Task = {
@@ -41,6 +42,16 @@ type SyncStatus = {
   lastDetails: { imported: number; updated: number; total: number } | null;
 };
 
+type ProjectClient = {
+  id: string;
+  user: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    image: string | null;
+  };
+};
+
 export default function ProjectPage() {
   const { projectId } = useParams();
   const projectIdParam = Array.isArray(projectId) ? projectId[0] : projectId;
@@ -55,11 +66,22 @@ export default function ProjectPage() {
   const [webhookActive, setWebhookActive] = useState(false);
   const [settingUpWebhook, setSettingUpWebhook] = useState(false);
 
+  // Connect GitHub repo
+  const [repoUrl, setRepoUrl] = useState("");
+  const [connectingRepo, setConnectingRepo] = useState(false);
+  const [connectError, setConnectError] = useState("");
+
   const [newTask, setNewTask] = useState<{ [key: string]: string }>({});
   const [boardId, setBoardId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
+
+  // Client management
+  const [clients, setClients] = useState<ProjectClient[]>([]);
+  const [clientEmail, setClientEmail] = useState("");
+  const [clientError, setClientError] = useState("");
+  const [invitingClient, setInvitingClient] = useState(false);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -93,17 +115,23 @@ export default function ProjectPage() {
         `/api/projects/${projectIdParam}`,
       ),
       fetchJson<Task[]>(`/api/projects/${projectIdParam}/tasks`),
-      fetchJson<GitHubStatus>(`/api/projects/${projectIdParam}/github-status`),
+      fetchJson<GitHubStatus>(
+        `/api/projects/${projectIdParam}/github-status`,
+      ).catch(() => null),
       fetchJson<SyncStatus>(
         `/api/projects/${projectIdParam}/github-sync/status`,
-      ),
+      ).catch(() => null),
+      fetchJson<ProjectClient[]>(
+        `/api/projects/${projectIdParam}/clients`,
+      ).catch(() => [] as ProjectClient[]),
     ])
-      .then(([projectData, taskData, githubData, syncData]) => {
+      .then(([projectData, taskData, githubData, syncData, clientData]) => {
         setBoardId(projectData.board.id);
         setWebhookActive(projectData.webhookActive);
         setTasks(taskData);
         setGithub(githubData);
         setSyncStatus(syncData);
+        setClients(clientData);
       })
       .catch((error) => {
         console.error("Failed to load project page data:", error);
@@ -370,6 +398,102 @@ export default function ProjectPage() {
     await importGitHubIssues();
     await syncPullRequests();
     await syncCommits();
+  };
+
+  const connectRepo = async () => {
+    if (connectingRepo || !repoUrl.trim()) return;
+    setConnectError("");
+    setConnectingRepo(true);
+    try {
+      // Parse owner/repo from URL or "owner/repo" format
+      const trimmed = repoUrl.trim().replace(/\/+$/, "");
+      let owner: string | undefined;
+      let repo: string | undefined;
+
+      const urlMatch = trimmed.match(/github\.com\/([^/]+)\/([^/]+)/);
+      if (urlMatch) {
+        owner = urlMatch[1];
+        repo = urlMatch[2].replace(/\.git$/, "");
+      } else if (/^[^/]+\/[^/]+$/.test(trimmed)) {
+        [owner, repo] = trimmed.split("/");
+      }
+
+      if (!owner || !repo) {
+        setConnectError("Enter a GitHub URL or owner/repo format");
+        return;
+      }
+
+      const res = await fetch(
+        `/api/projects/${projectIdParam}/connect-github`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ repoOwner: owner, repoName: repo }),
+        },
+      );
+      if (!res.ok) {
+        const data = await res.json();
+        setConnectError(data.error || "Failed to connect repository");
+        return;
+      }
+
+      // Refresh GitHub data
+      const [ghData, syncData] = await Promise.all([
+        fetchJson<GitHubStatus>(
+          `/api/projects/${projectIdParam}/github-status`,
+        ).catch(() => null),
+        fetchJson<SyncStatus>(
+          `/api/projects/${projectIdParam}/github-sync/status`,
+        ).catch(() => null),
+      ]);
+      setGithub(ghData);
+      setSyncStatus(syncData);
+      setRepoUrl("");
+    } catch {
+      setConnectError("Failed to connect repository");
+    } finally {
+      setConnectingRepo(false);
+    }
+  };
+
+  const inviteClient = async () => {
+    if (invitingClient || !clientEmail.trim()) return;
+    setClientError("");
+    setInvitingClient(true);
+    try {
+      const res = await fetch(`/api/projects/${projectIdParam}/clients`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: clientEmail.trim() }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setClientError(data.error || "Failed to invite client");
+        return;
+      }
+      const newClient = await res.json();
+      setClients((prev) => [newClient, ...prev]);
+      setClientEmail("");
+    } catch {
+      setClientError("Failed to invite client");
+    } finally {
+      setInvitingClient(false);
+    }
+  };
+
+  const removeClient = async (clientRecordId: string) => {
+    try {
+      const res = await fetch(`/api/projects/${projectIdParam}/clients`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId: clientRecordId }),
+      });
+      if (res.ok) {
+        setClients((prev) => prev.filter((c) => c.id !== clientRecordId));
+      }
+    } catch {
+      console.error("Failed to remove client");
+    }
   };
 
   if (loading) return <p>Loading project...</p>;
@@ -687,7 +811,32 @@ export default function ProjectPage() {
         <h5>GitHub</h5>
 
         {!github?.repository ? (
-          <p className="github-empty">No repository connected</p>
+          <div className="github-connect">
+            <p className="github-empty">No repository connected</p>
+            <input
+              type="text"
+              className="github-connect-input"
+              placeholder="owner/repo or GitHub URL"
+              value={repoUrl}
+              onChange={(e) => {
+                setRepoUrl(e.target.value);
+                setConnectError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") connectRepo();
+              }}
+            />
+            <button
+              className="sync-btn sync-btn-primary"
+              onClick={connectRepo}
+              disabled={connectingRepo}
+            >
+              {connectingRepo ? "Connecting..." : "Connect Repo"}
+            </button>
+            {connectError && (
+              <p className="github-connect-error">{connectError}</p>
+            )}
+          </div>
         ) : (
           <>
             <div className="github-repo-name">{github.repository.name}</div>
@@ -797,6 +946,63 @@ export default function ProjectPage() {
             </div>
           </>
         )}
+      </div>
+
+      {/* CLIENTS PANEL */}
+      <div className="clients-panel">
+        <h5>Clients</h5>
+        <div className="clients-invite">
+          <input
+            type="email"
+            placeholder="Client email..."
+            value={clientEmail}
+            onChange={(e) => {
+              setClientEmail(e.target.value);
+              setClientError("");
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") inviteClient();
+            }}
+          />
+          <button onClick={inviteClient} disabled={invitingClient}>
+            {invitingClient ? "..." : "Invite"}
+          </button>
+        </div>
+        {clientError && <p className="clients-error">{clientError}</p>}
+        <div className="clients-list">
+          {clients.map((c) => (
+            <div key={c.id} className="clients-item">
+              <div className="clients-item-info">
+                {c.user.image ? (
+                  <Image
+                    src={c.user.image}
+                    alt=""
+                    width={24}
+                    height={24}
+                    className="clients-item-avatar"
+                  />
+                ) : (
+                  <span className="clients-item-avatar-fallback">
+                    {c.user.name?.[0]?.toUpperCase() ?? "?"}
+                  </span>
+                )}
+                <span className="clients-item-name">
+                  {c.user.name ?? c.user.email}
+                </span>
+              </div>
+              <button
+                className="clients-item-remove"
+                onClick={() => removeClient(c.id)}
+                title="Remove client"
+              >
+                &times;
+              </button>
+            </div>
+          ))}
+          {clients.length === 0 && (
+            <p className="clients-empty">No clients invited yet.</p>
+          )}
+        </div>
       </div>
 
       {/* TASK DETAIL PANEL */}

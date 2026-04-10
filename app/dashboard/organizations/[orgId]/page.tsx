@@ -13,7 +13,7 @@ type Project = {
 
 type Member = {
   id: string;
-  role: "ADMIN" | "MEMBER";
+  role: "ADMIN" | "MEMBER" | "CLIENT";
   user: {
     id: string;
     name: string | null;
@@ -47,7 +47,9 @@ export default function OrgPage() {
 
   // Member invite
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"MEMBER" | "ADMIN">("MEMBER");
+  const [inviteRole, setInviteRole] = useState<"MEMBER" | "ADMIN" | "CLIENT">(
+    "MEMBER",
+  );
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState("");
 
@@ -71,8 +73,8 @@ export default function OrgPage() {
           (o: OrgInfo) => o.id === orgIdStr,
         );
         if (thisOrg) setOrg(thisOrg);
-        setProjects(projs);
-        setMembers(mems);
+        if (Array.isArray(projs)) setProjects(projs);
+        if (Array.isArray(mems)) setMembers(mems);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -156,7 +158,10 @@ export default function OrgPage() {
     setInviting(false);
   };
 
-  const changeRole = async (memberId: string, newRole: "ADMIN" | "MEMBER") => {
+  const changeRole = async (
+    memberId: string,
+    newRole: "ADMIN" | "MEMBER" | "CLIENT",
+  ) => {
     const res = await fetch(`/api/organizations/${orgIdStr}/members`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -302,11 +307,12 @@ export default function OrgPage() {
               <select
                 value={inviteRole}
                 onChange={(e) =>
-                  setInviteRole(e.target.value as "ADMIN" | "MEMBER")
+                  setInviteRole(e.target.value as "ADMIN" | "MEMBER" | "CLIENT")
                 }
               >
                 <option value="MEMBER">Member</option>
                 <option value="ADMIN">Admin</option>
+                <option value="CLIENT">Client</option>
               </select>
               <button
                 className="btn btn-primary"
@@ -350,11 +356,15 @@ export default function OrgPage() {
                         className="role-select"
                         value={m.role}
                         onChange={(e) =>
-                          changeRole(m.id, e.target.value as "ADMIN" | "MEMBER")
+                          changeRole(
+                            m.id,
+                            e.target.value as "ADMIN" | "MEMBER" | "CLIENT",
+                          )
                         }
                       >
                         <option value="MEMBER">Member</option>
                         <option value="ADMIN">Admin</option>
+                        <option value="CLIENT">Client</option>
                       </select>
                       <button
                         className="member-remove"

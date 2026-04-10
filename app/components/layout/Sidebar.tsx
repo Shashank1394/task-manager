@@ -9,6 +9,7 @@ import Image from "next/image";
 type Org = {
   id: string;
   name: string;
+  members: { role: string }[];
 };
 
 type Project = {
@@ -38,6 +39,31 @@ export default function Sidebar() {
         }
         // Fetch projects for each org
         data.forEach((org) => {
+          const isClient = org.members?.[0]?.role === "CLIENT";
+          if (isClient) {
+            // For clients, fetch their assigned projects via client dashboard
+            fetch(`/api/client/${org.id}/dashboard`)
+              .then((r) => r.json())
+              .then((dashboard: { projects: Project[] }) => {
+                setProjectsByOrg((prev) => ({
+                  ...prev,
+                  [org.id]: dashboard.projects.map((p) => ({
+                    id: p.id,
+                    name: p.name,
+                  })),
+                }));
+                // Auto-expand if a project under it is active
+                const projMatch = pathname.match(/\/project\/([^/]+)/);
+                if (
+                  projMatch &&
+                  dashboard.projects.some((p) => p.id === projMatch[1])
+                ) {
+                  setExpandedOrgs((prev) => new Set([...prev, org.id]));
+                }
+              })
+              .catch(() => {});
+            return;
+          }
           fetch(`/api/organizations/${org.id}/projects`)
             .then((r) => r.json())
             .then((projects: Project[]) => {
@@ -82,44 +108,88 @@ export default function Sidebar() {
 
         <div className="sidebar__section-label">Organizations</div>
 
-        {orgs.map((org) => (
-          <div key={org.id} className="sidebar__org">
-            <div className="sidebar__org-header">
-              <Link
-                href={`/dashboard/organizations/${org.id}`}
-                className={`sidebar__link ${isActive(`/dashboard/organizations/${org.id}`) ? "sidebar__link--active" : ""}`}
-              >
-                <span className="sidebar__icon">🏢</span>
-                {org.name}
-              </Link>
-              <button
-                className={`sidebar__expand-btn ${expandedOrgs.has(org.id) ? "expanded" : ""}`}
-                onClick={() => toggleOrg(org.id)}
-                title="Toggle projects"
-              >
-                ▸
-              </button>
-            </div>
+        {orgs.map((org) => {
+          const isClient = org.members?.[0]?.role === "CLIENT";
 
-            {expandedOrgs.has(org.id) && (
-              <div className="sidebar__projects">
-                {(projectsByOrg[org.id] ?? []).map((proj) => (
+          if (isClient) {
+            return (
+              <div key={org.id} className="sidebar__org">
+                <div className="sidebar__org-header">
                   <Link
-                    key={proj.id}
-                    href={`/dashboard/project/${proj.id}`}
-                    className={`sidebar__link sidebar__link--project ${isActive(`/dashboard/project/${proj.id}`) ? "sidebar__link--active" : ""}`}
+                    href={`/dashboard/client/${org.id}`}
+                    className={`sidebar__link ${isActive(`/dashboard/client/${org.id}`) ? "sidebar__link--active" : ""}`}
                   >
-                    <span className="sidebar__icon">📁</span>
-                    {proj.name}
+                    <span className="sidebar__icon">📊</span>
+                    {org.name}
+                    <span className="sidebar__client-tag">Client</span>
                   </Link>
-                ))}
-                {projectsByOrg[org.id]?.length === 0 && (
-                  <span className="sidebar__empty">No projects</span>
+                  {(projectsByOrg[org.id]?.length ?? 0) > 0 && (
+                    <button
+                      className={`sidebar__expand-btn ${expandedOrgs.has(org.id) ? "expanded" : ""}`}
+                      onClick={() => toggleOrg(org.id)}
+                      title="Toggle projects"
+                    >
+                      ▸
+                    </button>
+                  )}
+                </div>
+                {expandedOrgs.has(org.id) && (
+                  <div className="sidebar__projects">
+                    {(projectsByOrg[org.id] ?? []).map((proj) => (
+                      <Link
+                        key={proj.id}
+                        href={`/dashboard/client/${org.id}`}
+                        className={`sidebar__link sidebar__link--project ${isActive(`/dashboard/client/${org.id}`) ? "sidebar__link--active" : ""}`}
+                      >
+                        <span className="sidebar__icon">📁</span>
+                        {proj.name}
+                      </Link>
+                    ))}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
-        ))}
+            );
+          }
+
+          return (
+            <div key={org.id} className="sidebar__org">
+              <div className="sidebar__org-header">
+                <Link
+                  href={`/dashboard/organizations/${org.id}`}
+                  className={`sidebar__link ${isActive(`/dashboard/organizations/${org.id}`) ? "sidebar__link--active" : ""}`}
+                >
+                  <span className="sidebar__icon">🏢</span>
+                  {org.name}
+                </Link>
+                <button
+                  className={`sidebar__expand-btn ${expandedOrgs.has(org.id) ? "expanded" : ""}`}
+                  onClick={() => toggleOrg(org.id)}
+                  title="Toggle projects"
+                >
+                  ▸
+                </button>
+              </div>
+
+              {expandedOrgs.has(org.id) && (
+                <div className="sidebar__projects">
+                  {(projectsByOrg[org.id] ?? []).map((proj) => (
+                    <Link
+                      key={proj.id}
+                      href={`/dashboard/project/${proj.id}`}
+                      className={`sidebar__link sidebar__link--project ${isActive(`/dashboard/project/${proj.id}`) ? "sidebar__link--active" : ""}`}
+                    >
+                      <span className="sidebar__icon">📁</span>
+                      {proj.name}
+                    </Link>
+                  ))}
+                  {projectsByOrg[org.id]?.length === 0 && (
+                    <span className="sidebar__empty">No projects</span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
 
         {orgs.length === 0 && (
           <span className="sidebar__empty">No organizations yet</span>

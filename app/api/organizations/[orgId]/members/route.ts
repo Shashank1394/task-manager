@@ -22,6 +22,11 @@ export async function GET(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    // Clients cannot view the members list
+    if (membership.role === "CLIENT") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const members = await prisma.organizationMember.findMany({
       where: { organizationId: orgId },
       include: {
@@ -98,7 +103,10 @@ export async function POST(
       );
     }
 
-    const memberRole = role === "ADMIN" ? "ADMIN" : "MEMBER";
+    const validRoles = ["ADMIN", "MEMBER", "CLIENT"] as const;
+    const memberRole = validRoles.includes(role as (typeof validRoles)[number])
+      ? (role as "ADMIN" | "MEMBER" | "CLIENT")
+      : "MEMBER";
 
     const member = await prisma.organizationMember.create({
       data: {
@@ -153,9 +161,9 @@ export async function PATCH(
       role?: string;
     };
 
-    if (!memberId || !role || !["ADMIN", "MEMBER"].includes(role)) {
+    if (!memberId || !role || !["ADMIN", "MEMBER", "CLIENT"].includes(role)) {
       return NextResponse.json(
-        { error: "memberId and role (ADMIN or MEMBER) are required" },
+        { error: "memberId and role (ADMIN, MEMBER, or CLIENT) are required" },
         { status: 400 },
       );
     }
@@ -169,7 +177,7 @@ export async function PATCH(
     }
 
     // Prevent demoting the last admin
-    if (target.role === "ADMIN" && role === "MEMBER") {
+    if (target.role === "ADMIN" && role !== "ADMIN") {
       const adminCount = await prisma.organizationMember.count({
         where: { organizationId: orgId, role: "ADMIN" },
       });
@@ -183,7 +191,7 @@ export async function PATCH(
 
     const updated = await prisma.organizationMember.update({
       where: { id: memberId },
-      data: { role: role as "ADMIN" | "MEMBER" },
+      data: { role: role as "ADMIN" | "MEMBER" | "CLIENT" },
       include: {
         user: {
           select: { id: true, name: true, email: true, image: true },

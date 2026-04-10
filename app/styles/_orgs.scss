@@ -261,6 +261,11 @@
     background: rgba(160, 160, 160, 0.12);
     color: #888;
   }
+
+  &.role-client {
+    background: rgba(64, 192, 87, 0.12);
+    color: #40c057;
+  }
 }
 
 .role-select {

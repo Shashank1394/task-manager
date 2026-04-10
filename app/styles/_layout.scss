@@ -133,6 +133,18 @@
   font-style: italic;
 }
 
+.sidebar__client-tag {
+  margin-left: auto;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--accent, #4dabf7);
+  color: #fff;
+  border-radius: 999px;
+}
+
 .sidebar__user-wrapper {
   position: relative;
 }

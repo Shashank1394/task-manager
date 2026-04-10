@@ -11,9 +11,9 @@ const authMiddleware = withAuth({
 export default function middleware(request: NextRequest) {
   // GitHub now sends an `iss` query param (RFC 9207) in OAuth callbacks.
   // openid-client 5.x picks it up and tries OIDC issuer validation, which
-  // fails because GitHub isn't an OIDC provider. Strip it before NextAuth.
+  // fails because GitHub isn't an OIDC provider. Strip it only for GitHub.
   if (
-    request.nextUrl.pathname.startsWith("/api/auth/callback") &&
+    request.nextUrl.pathname === "/api/auth/callback/github" &&
     request.nextUrl.searchParams.has("iss")
   ) {
     const url = request.nextUrl.clone();

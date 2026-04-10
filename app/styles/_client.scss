@@ -1,0 +1,198 @@
+/* CLIENT DASHBOARD */
+
+.client-dashboard {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.client-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+
+  h1 {
+    margin: 0;
+    font-size: 1.5rem;
+  }
+}
+
+.client-badge {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--accent, #4dabf7);
+  color: #fff;
+  border-radius: 999px;
+}
+
+.client-loading,
+.client-error {
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.client-error {
+  color: #e5484d;
+}
+
+/* Stats Grid */
+
+.client-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.client-stat {
+  padding: 1rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.client-stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.client-stat-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.client-stat--done .client-stat-value {
+  color: #40c057;
+}
+
+.client-stat--progress .client-stat-value {
+  color: #fab005;
+}
+
+.client-stat--completion .client-stat-value {
+  color: var(--accent, #4dabf7);
+}
+
+/* Overall Progress */
+
+.client-overall-progress {
+  margin-bottom: 2rem;
+}
+
+.client-overall-bar {
+  height: 10px;
+  background: var(--bg-muted);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.client-overall-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent, #4dabf7), #40c057);
+  border-radius: 999px;
+  transition: width 0.5s ease;
+}
+
+/* Section Title */
+
+.client-section-title {
+  font-size: 1.1rem;
+  margin: 0 0 1rem;
+}
+
+/* Project Cards */
+
+.client-projects {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.client-project-card {
+  padding: 1.25rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+}
+
+.client-project-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+
+  h3 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+}
+
+.client-project-pct {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--accent, #4dabf7);
+}
+
+.client-project-bar {
+  height: 6px;
+  background: var(--bg-muted);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+}
+
+.client-project-fill {
+  height: 100%;
+  background: var(--accent, #4dabf7);
+  border-radius: 999px;
+  transition: width 0.5s ease;
+}
+
+.client-project-stats {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.client-project-stat {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot--todo {
+  background: var(--text-secondary);
+}
+
+.dot--progress {
+  background: #fab005;
+}
+
+.dot--done {
+  background: #40c057;
+}
+
+.client-empty {
+  color: var(--text-secondary);
+  font-style: italic;
+  padding: 1rem 0;
+}

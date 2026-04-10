@@ -382,6 +382,36 @@
 .github-empty {
   font-size: 0.85rem;
   color: var(--text-secondary);
+  margin: 0 0 0.5rem;
+}
+
+.github-connect {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.github-connect-input {
+  padding: 0.45rem 0.6rem;
+  font-size: 0.82rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  background: var(--bg-card);
+  color: var(--text-primary);
+
+  &::placeholder {
+    color: var(--text-secondary);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--text-primary);
+  }
+}
+
+.github-connect-error {
+  font-size: 0.78rem;
+  color: #ef4444;
   margin: 0;
 }
 
@@ -1110,4 +1140,154 @@
   &:hover {
     text-decoration: underline;
   }
+}
+
+/* CLIENTS PANEL */
+
+.clients-panel {
+  width: 100%;
+  padding: 1rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  align-self: flex-start;
+
+  h5 {
+    margin: 0 0 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+  }
+
+  @media (min-width: 992px) {
+    width: 280px;
+  }
+}
+
+.clients-invite {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+
+  input {
+    flex: 1;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.8rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.375rem;
+    background: var(--bg-card);
+    color: var(--text-primary);
+
+    &::placeholder {
+      color: var(--text-secondary);
+    }
+
+    &:focus {
+      outline: none;
+      border-color: var(--text-primary);
+    }
+  }
+
+  button {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 0.375rem;
+    background: var(--accent-color, #3b82f6);
+    color: #fff;
+    cursor: pointer;
+    white-space: nowrap;
+
+    &:hover {
+      opacity: 0.9;
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+}
+
+.clients-error {
+  font-size: 0.78rem;
+  color: #ef4444;
+  margin: 0 0 0.5rem;
+}
+
+.clients-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.clients-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.375rem;
+  background: var(--bg-muted);
+}
+
+.clients-item-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.clients-item-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.clients-item-avatar-fallback {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: var(--border-color);
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.clients-item-name {
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clients-item-remove {
+  background: none;
+  border: none;
+  font-size: 1rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0 0.25rem;
+  line-height: 1;
+  flex-shrink: 0;
+
+  &:hover {
+    color: #ef4444;
+  }
+}
+
+.clients-empty {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin: 0;
+  text-align: center;
+  padding: 0.5rem 0;
 }

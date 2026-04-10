@@ -22,6 +22,7 @@ datasource db {
 enum Role {
   ADMIN
   MEMBER
+  CLIENT
 }
 
 enum TaskStatus {
@@ -74,6 +75,7 @@ model User {
   memberships   OrganizationMember[]
   assignedTasks Task[]
   comments      Comment[]
+  clientProjects ProjectClient[]
 }
 
 model Account {
@@ -156,6 +158,20 @@ model Project {
   githubPRs      GitHubPR[]
   githubCommits  GitHubCommit[]
   githubSyncLogs GitHubSyncLog[]
+  clients        ProjectClient[]
+}
+
+model ProjectClient {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  userId    String
+  projectId String
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
 }
 
 model Board {

@@ -61,6 +61,11 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // Clients cannot list projects directly
+  if (membership.role === "CLIENT") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const projects = await prisma.project.findMany({
     where: {
       organizationId: orgId,
