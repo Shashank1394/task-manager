@@ -1724,3 +1724,206 @@
     background: var(--bg-primary);
   }
 }
+
+/* ── Sprints Panel ── */
+
+.sprints-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-top: 1rem;
+
+  h5 {
+    margin: 0 0 0.75rem;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+  }
+}
+
+.sprint-create {
+  display: flex;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+
+  input {
+    flex: 1;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.375rem;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.8rem;
+
+    &:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+  }
+
+  button {
+    padding: 0.35rem 0.65rem;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+
+    &:hover:not(:disabled) {
+      opacity: 0.9;
+    }
+
+    &:disabled {
+      opacity: 0.5;
+    }
+  }
+}
+
+.sprint-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sprint-card {
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-primary);
+
+  &.sprint-active {
+    border-color: var(--accent);
+    border-left: 3px solid var(--accent);
+  }
+
+  &.sprint-completed {
+    opacity: 0.6;
+  }
+}
+
+.sprint-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.3rem;
+}
+
+.sprint-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.sprint-status-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+
+  &.planning {
+    background: #f0ad4e20;
+    color: #f0ad4e;
+  }
+
+  &.active {
+    background: #22c55e20;
+    color: #22c55e;
+  }
+
+  &.completed {
+    background: #6b728020;
+    color: #6b7280;
+  }
+}
+
+.sprint-card-meta {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.4rem;
+}
+
+.sprint-task-count {
+  font-weight: 500;
+}
+
+.sprint-dates {
+  color: var(--text-muted, #999);
+}
+
+.sprint-card-actions {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+}
+
+.sprint-action-btn {
+  font-size: 0.7rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.25rem;
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+
+  &.start {
+    background: #22c55e;
+    color: #fff;
+
+    &:hover {
+      background: #16a34a;
+    }
+  }
+
+  &.complete {
+    background: var(--accent);
+    color: #fff;
+
+    &:hover {
+      opacity: 0.9;
+    }
+  }
+
+  &.delete {
+    background: none;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+
+    &:hover {
+      color: #e74c3c;
+      border-color: #e74c3c;
+    }
+  }
+}
+
+.sprint-empty {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-align: center;
+  padding: 0.5rem 0;
+  margin: 0;
+}
+
+/* Sprint select on task cards */
+
+.task-sprint-select {
+  width: 100%;
+  padding: 0.15rem 0.3rem;
+  font-size: 0.65rem;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  margin-top: 0.25rem;
+
+  &:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+}

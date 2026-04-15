@@ -59,6 +59,11 @@ export async function POST(
     where: { id: task.id },
     include: {
       assignee: { select: { id: true, name: true, email: true, image: true } },
+      labels: {
+        select: { id: true, name: true, color: true },
+        orderBy: { name: "asc" },
+      },
+      sprint: { select: { id: true, name: true, status: true } },
       _count: { select: { comments: true } },
     },
   });
@@ -95,6 +100,11 @@ export async function GET(
     orderBy: { createdAt: "asc" },
     include: {
       assignee: { select: { id: true, name: true, email: true, image: true } },
+      labels: {
+        select: { id: true, name: true, color: true },
+        orderBy: { name: "asc" },
+      },
+      sprint: { select: { id: true, name: true, status: true } },
       _count: { select: { comments: true } },
     },
   });

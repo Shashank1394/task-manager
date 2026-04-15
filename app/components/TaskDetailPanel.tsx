@@ -93,6 +93,7 @@ type Props = {
     _count: { comments: number };
     githubIssueUrl: string | null;
     labels: { id: string; name: string; color: string }[];
+    sprint: { id: string; name: string; status: string } | null;
   }) => void;
 };
 
@@ -175,6 +176,12 @@ export default function TaskDetailPanel({
         _count: { comments: task.comments.length },
         githubIssueUrl: task.githubIssueUrl,
         labels: task.labels ?? [],
+        sprint:
+          ((task as Record<string, unknown>).sprint as {
+            id: string;
+            name: string;
+            status: string;
+          } | null) ?? null,
       });
     }
     setSaving(false);
@@ -206,6 +213,12 @@ export default function TaskDetailPanel({
           _count: { comments: task.comments.length + 1 },
           githubIssueUrl: task.githubIssueUrl,
           labels: task.labels ?? [],
+          sprint:
+            ((task as Record<string, unknown>).sprint as {
+              id: string;
+              name: string;
+              status: string;
+            } | null) ?? null,
         });
       }
     }

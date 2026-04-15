@@ -49,6 +49,9 @@ export async function GET(
           select: { id: true, name: true, color: true },
           orderBy: { name: "asc" },
         },
+        sprint: {
+          select: { id: true, name: true, status: true },
+        },
         _count: { select: { comments: true } },
       },
     });

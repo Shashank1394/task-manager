@@ -21,6 +21,17 @@ type Task = {
   _count: { comments: number };
   githubIssueUrl: string | null;
   labels: { id: string; name: string; color: string }[];
+  sprint: { id: string; name: string; status: string } | null;
+};
+
+type Sprint = {
+  id: string;
+  name: string;
+  goal: string | null;
+  status: "PLANNING" | "ACTIVE" | "COMPLETED";
+  startDate: string | null;
+  endDate: string | null;
+  _count: { tasks: number };
 };
 
 type GitHubStatus = {
@@ -90,6 +101,12 @@ export default function ProjectPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterPriority, setFilterPriority] = useState<string>("ALL");
   const [filterAssignee, setFilterAssignee] = useState<string>("ALL");
+  const [filterSprint, setFilterSprint] = useState<string>("ALL");
+
+  // Sprints
+  const [sprints, setSprints] = useState<Sprint[]>([]);
+  const [newSprintName, setNewSprintName] = useState("");
+  const [creatingSprint, setCreatingSprint] = useState(false);
 
   const fetchJson = async <T,>(url: string): Promise<T> => {
     const res = await fetch(url);
@@ -127,15 +144,28 @@ export default function ProjectPage() {
       fetchJson<ProjectClient[]>(
         `/api/projects/${projectIdParam}/clients`,
       ).catch(() => [] as ProjectClient[]),
+      fetchJson<Sprint[]>(`/api/projects/${projectIdParam}/sprints`).catch(
+        () => [] as Sprint[],
+      ),
     ])
-      .then(([projectData, taskData, githubData, syncData, clientData]) => {
-        setBoardId(projectData.board.id);
-        setWebhookActive(projectData.webhookActive);
-        setTasks(taskData);
-        setGithub(githubData);
-        setSyncStatus(syncData);
-        setClients(clientData);
-      })
+      .then(
+        ([
+          projectData,
+          taskData,
+          githubData,
+          syncData,
+          clientData,
+          sprintData,
+        ]) => {
+          setBoardId(projectData.board.id);
+          setWebhookActive(projectData.webhookActive);
+          setTasks(taskData);
+          setGithub(githubData);
+          setSyncStatus(syncData);
+          setClients(clientData);
+          setSprints(sprintData);
+        },
+      )
       .catch((error) => {
         console.error("Failed to load project page data:", error);
       })
@@ -499,6 +529,133 @@ export default function ProjectPage() {
     }
   };
 
+  // Sprint handlers
+  const createSprint = async () => {
+    if (!newSprintName.trim() || creatingSprint) return;
+    setCreatingSprint(true);
+    try {
+      const res = await fetch(`/api/projects/${projectIdParam}/sprints`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newSprintName.trim() }),
+      });
+      if (res.ok) {
+        const sprint: Sprint = await res.json();
+        setSprints((prev) => [sprint, ...prev]);
+        setNewSprintName("");
+      }
+    } catch {
+      console.error("Failed to create sprint");
+    } finally {
+      setCreatingSprint(false);
+    }
+  };
+
+  const updateSprint = async (
+    sprintId: string,
+    updates: Partial<
+      Pick<Sprint, "name" | "status" | "startDate" | "endDate" | "goal">
+    >,
+  ) => {
+    try {
+      const res = await fetch(`/api/projects/${projectIdParam}/sprints`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sprintId, ...updates }),
+      });
+      if (res.ok) {
+        const updated: Sprint = await res.json();
+        setSprints((prev) =>
+          prev.map((s) => {
+            if (s.id === updated.id) return updated;
+            // If a sprint was activated, others become completed
+            if (
+              updates.status === "ACTIVE" &&
+              s.status === "ACTIVE" &&
+              s.id !== updated.id
+            ) {
+              return { ...s, status: "COMPLETED" as const };
+            }
+            return s;
+          }),
+        );
+      }
+    } catch {
+      console.error("Failed to update sprint");
+    }
+  };
+
+  const deleteSprint = async (sprintId: string) => {
+    try {
+      const res = await fetch(
+        `/api/projects/${projectIdParam}/sprints?sprintId=${sprintId}`,
+        { method: "DELETE" },
+      );
+      if (res.ok) {
+        setSprints((prev) => prev.filter((s) => s.id !== sprintId));
+        // Unlink tasks from this sprint in local state
+        setTasks((prev) =>
+          prev.map((t) =>
+            t.sprint?.id === sprintId ? { ...t, sprint: null } : t,
+          ),
+        );
+        if (filterSprint === sprintId) setFilterSprint("ALL");
+      }
+    } catch {
+      console.error("Failed to delete sprint");
+    }
+  };
+
+  const assignTaskToSprint = async (
+    taskId: string,
+    sprintId: string | null,
+  ) => {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sprintId }),
+      });
+      if (res.ok) {
+        const sprintInfo = sprintId
+          ? sprints.find((s) => s.id === sprintId)
+          : null;
+        setTasks((prev) =>
+          prev.map((t) =>
+            t.id === taskId
+              ? {
+                  ...t,
+                  sprint: sprintInfo
+                    ? {
+                        id: sprintInfo.id,
+                        name: sprintInfo.name,
+                        status: sprintInfo.status,
+                      }
+                    : null,
+                }
+              : t,
+          ),
+        );
+        // Update sprint task counts
+        setSprints((prev) =>
+          prev.map((s) => ({
+            ...s,
+            _count: {
+              tasks:
+                s._count.tasks +
+                (s.id === sprintId ? 1 : 0) -
+                (tasks.find((t) => t.id === taskId)?.sprint?.id === s.id
+                  ? 1
+                  : 0),
+            },
+          })),
+        );
+      }
+    } catch {
+      console.error("Failed to assign task to sprint");
+    }
+  };
+
   if (loading) return <p>Loading project...</p>;
 
   // Derive unique assignees for the filter dropdown
@@ -521,6 +678,11 @@ export default function ProjectPage() {
       if (filterAssignee !== "UNASSIGNED" && t.assignee?.id !== filterAssignee)
         return false;
     }
+    if (filterSprint !== "ALL") {
+      if (filterSprint === "BACKLOG" && t.sprint) return false;
+      if (filterSprint !== "BACKLOG" && t.sprint?.id !== filterSprint)
+        return false;
+    }
     return true;
   });
 
@@ -530,7 +692,10 @@ export default function ProjectPage() {
   };
   const completedTasks = filteredTasks.filter((t) => t.status === "DONE");
   const hasActiveFilters =
-    searchQuery !== "" || filterPriority !== "ALL" || filterAssignee !== "ALL";
+    searchQuery !== "" ||
+    filterPriority !== "ALL" ||
+    filterAssignee !== "ALL" ||
+    filterSprint !== "ALL";
 
   return (
     <div className="project-page">
@@ -575,6 +740,20 @@ export default function ProjectPage() {
                 </option>
               ))}
             </select>
+            <select
+              className="filter-select"
+              value={filterSprint}
+              onChange={(e) => setFilterSprint(e.target.value)}
+            >
+              <option value="ALL">All Sprints</option>
+              <option value="BACKLOG">Backlog</option>
+              {sprints.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                  {s.status === "ACTIVE" ? " ●" : ""}
+                </option>
+              ))}
+            </select>
           </div>
           {hasActiveFilters && (
             <button
@@ -583,6 +762,7 @@ export default function ProjectPage() {
                 setSearchQuery("");
                 setFilterPriority("ALL");
                 setFilterAssignee("ALL");
+                setFilterSprint("ALL");
               }}
             >
               Clear filters
@@ -673,7 +853,7 @@ export default function ProjectPage() {
                         </button>
                       )}
                     </div>
-                    {task.labels.length > 0 && (
+                    {task.labels?.length > 0 && (
                       <div className="task-card-labels">
                         {task.labels.map((l) => (
                           <span
@@ -701,6 +881,24 @@ export default function ProjectPage() {
                           day: "numeric",
                         })}
                       </span>
+                    )}
+                    {sprints.length > 0 && (
+                      <select
+                        className="task-sprint-select"
+                        value={task.sprint?.id ?? ""}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          assignTaskToSprint(task.id, e.target.value || null);
+                        }}
+                      >
+                        <option value="">Backlog</option>
+                        {sprints.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
                     )}
                     <div className="task-card-bottom">
                       <div className="task-card-meta">
@@ -1040,6 +1238,106 @@ export default function ProjectPage() {
           ))}
           {clients.length === 0 && (
             <p className="clients-empty">No clients invited yet.</p>
+          )}
+        </div>
+      </div>
+
+      {/* SPRINTS PANEL */}
+      <div className="sprints-panel">
+        <h5>Sprints</h5>
+        <div className="sprint-create">
+          <input
+            type="text"
+            placeholder="New sprint name..."
+            value={newSprintName}
+            onChange={(e) => setNewSprintName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") createSprint();
+            }}
+          />
+          <button onClick={createSprint} disabled={creatingSprint}>
+            +
+          </button>
+        </div>
+
+        <div className="sprint-list">
+          {sprints.map((sprint) => (
+            <div
+              key={sprint.id}
+              className={`sprint-card sprint-${sprint.status.toLowerCase()}`}
+            >
+              <div className="sprint-card-header">
+                <span className="sprint-name">{sprint.name}</span>
+                <span
+                  className={`sprint-status-badge ${sprint.status.toLowerCase()}`}
+                >
+                  {sprint.status}
+                </span>
+              </div>
+              <div className="sprint-card-meta">
+                <span className="sprint-task-count">
+                  {sprint._count.tasks} task
+                  {sprint._count.tasks !== 1 ? "s" : ""}
+                </span>
+                {sprint.startDate && (
+                  <span className="sprint-dates">
+                    {new Date(sprint.startDate).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                    })}
+                    {sprint.endDate &&
+                      ` – ${new Date(sprint.endDate).toLocaleDateString(
+                        "en-US",
+                        {
+                          month: "short",
+                          day: "numeric",
+                        },
+                      )}`}
+                  </span>
+                )}
+              </div>
+              <div className="sprint-card-actions">
+                {sprint.status === "PLANNING" && (
+                  <>
+                    <button
+                      className="sprint-action-btn start"
+                      onClick={() =>
+                        updateSprint(sprint.id, {
+                          status: "ACTIVE",
+                          startDate: new Date().toISOString(),
+                        })
+                      }
+                    >
+                      Start Sprint
+                    </button>
+                    <button
+                      className="sprint-action-btn delete"
+                      onClick={() => deleteSprint(sprint.id)}
+                    >
+                      ✕
+                    </button>
+                  </>
+                )}
+                {sprint.status === "ACTIVE" && (
+                  <button
+                    className="sprint-action-btn complete"
+                    onClick={() =>
+                      updateSprint(sprint.id, {
+                        status: "COMPLETED",
+                        endDate: new Date().toISOString(),
+                      })
+                    }
+                  >
+                    Complete Sprint
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+          {sprints.length === 0 && (
+            <p className="sprint-empty">
+              No sprints yet. Create one to get started.
+            </p>
           )}
         </div>
       </div>

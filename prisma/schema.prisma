@@ -58,6 +58,12 @@ enum GitHubSyncAction {
   WEBHOOK_SETUP
 }
 
+enum SprintStatus {
+  PLANNING
+  ACTIVE
+  COMPLETED
+}
+
 // MODELS
 
 model User {
@@ -159,6 +165,7 @@ model Project {
   githubCommits  GitHubCommit[]
   githubSyncLogs GitHubSyncLog[]
   clients        ProjectClient[]
+  sprints        Sprint[]
 }
 
 model ProjectClient {
@@ -172,6 +179,21 @@ model ProjectClient {
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([userId, projectId])
+}
+
+model Sprint {
+  id        String       @id @default(cuid())
+  name      String
+  goal      String?
+  status    SprintStatus @default(PLANNING)
+  startDate DateTime?
+  endDate   DateTime?
+  createdAt DateTime     @default(now())
+
+  projectId String
+  project   Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  tasks     Task[]
 }
 
 model Board {
@@ -198,6 +220,9 @@ model Task {
 
   assigneeId  String?
   assignee    User?         @relation(fields: [assigneeId], references: [id])
+
+  sprintId    String?
+  sprint      Sprint?       @relation(fields: [sprintId], references: [id], onDelete: SetNull)
 
   comments    Comment[]
   labels      Label[]

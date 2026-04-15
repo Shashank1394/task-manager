@@ -122,6 +122,7 @@ export async function PATCH(
       data.assigneeId = body.assigneeId || null;
     if (body.dueDate !== undefined)
       data.dueDate = body.dueDate ? new Date(body.dueDate) : null;
+    if (body.sprintId !== undefined) data.sprintId = body.sprintId || null;
 
     const updated = await prisma.task.update({
       where: { id: taskId },
