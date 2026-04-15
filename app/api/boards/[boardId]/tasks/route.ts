@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-server";
 import { TaskStatus, TaskPriority } from "@prisma/client";
+import { logActivity } from "@/lib/activity";
 
 export async function POST(
   req: Request,
@@ -66,6 +67,14 @@ export async function POST(
       sprint: { select: { id: true, name: true, status: true } },
       _count: { select: { comments: true } },
     },
+  });
+
+  logActivity({
+    type: "TASK_CREATED",
+    message: `created "${title}"`,
+    userId: session.user.id,
+    projectId: board.projectId,
+    taskId: task.id,
   });
 
   return NextResponse.json(created, { status: 201 });

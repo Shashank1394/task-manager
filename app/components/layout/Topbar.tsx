@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import ThemeToggle from "../ThemeToggle";
+import NotificationBell from "../NotificationBell";
 
 type SearchResults = {
   tasks: {
@@ -184,6 +185,7 @@ export default function Topbar() {
       </div>
 
       <div className="topbar__right">
+        <NotificationBell />
         <ThemeToggle />
       </div>
     </div>

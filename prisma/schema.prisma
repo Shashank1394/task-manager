@@ -78,10 +78,12 @@ model User {
   accounts      Account[]
   sessions      Session[]
 
-  memberships   OrganizationMember[]
-  assignedTasks Task[]
-  comments      Comment[]
+  memberships    OrganizationMember[]
+  assignedTasks  Task[]
+  comments       Comment[]
   clientProjects ProjectClient[]
+  activities     Activity[]
+  notifications  Notification[]
 }
 
 model Account {
@@ -166,6 +168,7 @@ model Project {
   githubSyncLogs GitHubSyncLog[]
   clients        ProjectClient[]
   sprints        Sprint[]
+  activities     Activity[]
 }
 
 model ProjectClient {
@@ -234,6 +237,7 @@ model Task {
   githubIssue    GitHubIssue?
   githubPRs      GitHubPR[]
   githubCommits  GitHubCommit[]
+  activities     Activity[]
 }
 
 model Comment {
@@ -331,4 +335,37 @@ model GitHubCommit {
   project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, sha])
+}
+
+// ─── Activity Feed ───────────────────────────────────────────
+
+model Activity {
+  id        String   @id @default(cuid())
+  type      String   // TASK_CREATED, TASK_MOVED, TASK_ASSIGNED, COMMENT_ADDED, SPRINT_STARTED, etc.
+  message   String
+  meta      Json?    // extra data (e.g. { from: "TODO", to: "IN_PROGRESS" })
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  taskId    String?
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+}
+
+// ─── Notifications ───────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  type      String   // TASK_ASSIGNED, MENTIONED, DEADLINE_APPROACHING, TASK_COMPLETED, etc.
+  message   String
+  link      String?  // URL to navigate to
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

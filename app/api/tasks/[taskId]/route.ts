@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-server";
 import { TaskStatus, TaskPriority } from "@prisma/client";
+import { logActivity, notify } from "@/lib/activity";
 
 /** Shared auth check — returns task or null. Blocks CLIENT role. */
 async function authorizeTask(taskId: string, userId: string) {
@@ -136,8 +137,46 @@ export async function PATCH(
         assignee: {
           select: { id: true, name: true, email: true, image: true },
         },
+        board: {
+          select: { projectId: true },
+        },
       },
     });
+
+    const projectId = updated.board.projectId;
+
+    // Log activity for status changes
+    if (body.status !== undefined && body.status !== task.status) {
+      logActivity({
+        type: "TASK_MOVED",
+        message: `moved "${updated.title}" from ${task.status.replace("_", " ")} to ${body.status.replace("_", " ")}`,
+        userId: session.user.id,
+        projectId,
+        taskId,
+        meta: { from: task.status, to: body.status },
+      });
+    }
+
+    // Log + notify for assignment changes
+    if (body.assigneeId !== undefined && body.assigneeId !== task.assigneeId) {
+      if (body.assigneeId) {
+        logActivity({
+          type: "TASK_ASSIGNED",
+          message: `assigned "${updated.title}" to ${updated.assignee?.name ?? "someone"}`,
+          userId: session.user.id,
+          projectId,
+          taskId,
+        });
+        if (body.assigneeId !== session.user.id) {
+          notify(
+            body.assigneeId,
+            "TASK_ASSIGNED",
+            `You were assigned to "${updated.title}"`,
+            `/dashboard/project/${projectId}`,
+          );
+        }
+      }
+    }
 
     // Auto-close/reopen linked GitHub issue when status changes
     if (body.status !== undefined) {
@@ -163,7 +202,22 @@ export async function DELETE(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    // Get project info before deleting
+    const taskWithBoard = await prisma.task.findUnique({
+      where: { id: taskId },
+      select: { title: true, board: { select: { projectId: true } } },
+    });
+
     await prisma.task.delete({ where: { id: taskId } });
+
+    if (taskWithBoard) {
+      logActivity({
+        type: "TASK_DELETED",
+        message: `deleted "${taskWithBoard.title}"`,
+        userId: session.user.id,
+        projectId: taskWithBoard.board.projectId,
+      });
+    }
 
     return NextResponse.json({ success: true });
   } catch {

@@ -15,6 +15,22 @@ body {
     color 0.2s ease;
 }
 
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  select,
+  option {
+    background: var(--bg-card);
+    color: var(--text-primary);
+  }
+
+  input[type="date"],
+  input[type="time"],
+  input[type="datetime-local"] {
+    color-scheme: dark;
+  }
+}
+
 .card {
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);

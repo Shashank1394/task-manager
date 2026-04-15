@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-server";
+import { logActivity } from "@/lib/activity";
 
 export async function GET(
   _req: Request,
@@ -92,6 +93,21 @@ export async function POST(
         user: { select: { id: true, name: true, image: true } },
       },
     });
+
+    // Log activity — need projectId from task's board
+    const taskWithBoard = await prisma.task.findUnique({
+      where: { id: taskId },
+      select: { title: true, board: { select: { projectId: true } } },
+    });
+    if (taskWithBoard) {
+      logActivity({
+        type: "COMMENT_ADDED",
+        message: `commented on "${taskWithBoard.title}"`,
+        userId: session.user.id,
+        projectId: taskWithBoard.board.projectId,
+        taskId,
+      });
+    }
 
     return NextResponse.json(comment, { status: 201 });
   } catch {
