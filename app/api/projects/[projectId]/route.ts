@@ -46,6 +46,8 @@ export async function GET(
       organizationId: project.organizationId,
       board: project.board,
       webhookActive: !!project.webhookId,
+      repoOwner: project.repoOwner,
+      repoName: project.repoName,
     });
   } catch (error) {
     console.error(error);
@@ -117,6 +119,78 @@ export async function DELETE(
     });
 
     return NextResponse.json({ deleted: true });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+}
+
+// PATCH — update project settings (admin only)
+export async function PATCH(
+  req: Request,
+  context: { params: Promise<{ projectId: string }> },
+) {
+  try {
+    const { projectId } = await context.params;
+    const session = await requireAuth();
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        organization: { include: { members: true } },
+      },
+    });
+
+    if (!project) {
+      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    }
+
+    const membership = project.organization.members.find(
+      (m) => m.userId === session.user.id,
+    );
+
+    if (!membership || membership.role !== Role.ADMIN) {
+      return NextResponse.json(
+        { error: "Admin access required" },
+        { status: 403 },
+      );
+    }
+
+    const body = await req.json();
+    const data: Record<string, unknown> = {};
+
+    if (typeof body.name === "string" && body.name.trim()) {
+      data.name = body.name.trim();
+    }
+
+    if (typeof body.description === "string") {
+      data.description = body.description.trim() || null;
+    }
+
+    if (body.disconnectGitHub === true) {
+      data.repoProvider = null;
+      data.repoOwner = null;
+      data.repoName = null;
+      data.webhookSecret = null;
+      data.webhookId = null;
+    }
+
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json({ error: "No valid fields" }, { status: 400 });
+    }
+
+    const updated = await prisma.project.update({
+      where: { id: projectId },
+      data,
+    });
+
+    return NextResponse.json({
+      id: updated.id,
+      name: updated.name,
+      description: updated.description,
+      repoOwner: updated.repoOwner,
+      repoName: updated.repoName,
+    });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

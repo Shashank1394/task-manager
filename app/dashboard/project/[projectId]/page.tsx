@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import Image from "next/image";
 import TaskDetailPanel from "@/app/components/TaskDetailPanel";
 
@@ -537,6 +538,13 @@ export default function ProjectPage() {
         {/* FILTER BAR */}
         <div className="filter-bar">
           <div className="filter-bar-inputs">
+            <Link
+              href={`/dashboard/project/${projectIdParam}/settings`}
+              className="settings-gear"
+              title="Project Settings"
+            >
+              ⚙
+            </Link>
             <input
               type="text"
               className="filter-search"
