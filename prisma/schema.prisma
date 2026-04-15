@@ -190,6 +190,7 @@ model Task {
   description String?
   status      TaskStatus    @default(TODO)
   priority    TaskPriority  @default(MEDIUM)
+  dueDate     DateTime?
   createdAt   DateTime      @default(now())
 
   boardId     String
@@ -199,6 +200,8 @@ model Task {
   assignee    User?         @relation(fields: [assigneeId], references: [id])
 
   comments    Comment[]
+  labels      Label[]
+  subtasks    Subtask[]
 
   githubIssueUrl String?
   githubIssue    GitHubIssue?
@@ -216,6 +219,27 @@ model Comment {
 
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Label {
+  id    String @id @default(cuid())
+  name  String
+  color String @default("#6366f1")
+
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, name])
+}
+
+model Subtask {
+  id        String   @id @default(cuid())
+  title     String
+  done      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
 }
 
 model GitHubIssue {

@@ -9,6 +9,18 @@ type Comment = {
   user: { id: string; name: string | null; image: string | null };
 };
 
+type LabelData = {
+  id: string;
+  name: string;
+  color: string;
+};
+
+type SubtaskData = {
+  id: string;
+  title: string;
+  done: boolean;
+};
+
 type OrgMember = {
   id: string;
   role: string;
@@ -26,6 +38,7 @@ type TaskDetail = {
   description: string | null;
   status: "TODO" | "IN_PROGRESS" | "DONE";
   priority: "LOW" | "MEDIUM" | "HIGH";
+  dueDate: string | null;
   assigneeId: string | null;
   assignee: {
     id: string;
@@ -35,6 +48,8 @@ type TaskDetail = {
   } | null;
   createdAt: string;
   comments: Comment[];
+  labels: LabelData[];
+  subtasks: SubtaskData[];
   board: { project: { organizationId: string } };
   githubIssueUrl: string | null;
 };
@@ -73,9 +88,11 @@ type Props = {
     title: string;
     status: "TODO" | "IN_PROGRESS" | "DONE";
     priority: "LOW" | "MEDIUM" | "HIGH";
+    dueDate: string | null;
     assignee: TaskDetail["assignee"];
     _count: { comments: number };
     githubIssueUrl: string | null;
+    labels: { id: string; name: string; color: string }[];
   }) => void;
 };
 
@@ -94,6 +111,13 @@ export default function TaskDetailPanel({
   const [creatingBranch, setCreatingBranch] = useState(false);
   const [creatingIssue, setCreatingIssue] = useState(false);
   const [branchUrl, setBranchUrl] = useState<string | null>(null);
+
+  // Labels
+  const [newLabelName, setNewLabelName] = useState("");
+  const [newLabelColor, setNewLabelColor] = useState("#6366f1");
+
+  // Subtasks
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
 
   const loadTask = useCallback(async () => {
     try {
@@ -143,9 +167,14 @@ export default function TaskDetailPanel({
           field === "priority"
             ? (value as TaskDetail["priority"])
             : task.priority,
+        dueDate:
+          field === "dueDate"
+            ? (value as string | null)
+            : (task.dueDate ?? null),
         assignee: updated.assignee ?? task.assignee,
         _count: { comments: task.comments.length },
         githubIssueUrl: task.githubIssueUrl,
+        labels: task.labels ?? [],
       });
     }
     setSaving(false);
@@ -172,11 +201,96 @@ export default function TaskDetailPanel({
           title: task.title,
           status: task.status,
           priority: task.priority,
+          dueDate: task.dueDate ?? null,
           assignee: task.assignee,
           _count: { comments: task.comments.length + 1 },
           githubIssueUrl: task.githubIssueUrl,
+          labels: task.labels ?? [],
         });
       }
+    }
+  };
+
+  const addLabel = async () => {
+    if (!newLabelName.trim()) return;
+    const res = await fetch(`/api/tasks/${taskId}/labels`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newLabelName.trim(), color: newLabelColor }),
+    });
+    if (res.ok) {
+      const label: LabelData = await res.json();
+      setTask((prev) =>
+        prev ? { ...prev, labels: [...prev.labels, label] } : prev,
+      );
+      setNewLabelName("");
+    }
+  };
+
+  const removeLabel = async (labelId: string) => {
+    const res = await fetch(`/api/tasks/${taskId}/labels`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ labelId }),
+    });
+    if (res.ok) {
+      setTask((prev) =>
+        prev
+          ? { ...prev, labels: prev.labels.filter((l) => l.id !== labelId) }
+          : prev,
+      );
+    }
+  };
+
+  const addSubtask = async () => {
+    if (!newSubtaskTitle.trim()) return;
+    const res = await fetch(`/api/tasks/${taskId}/subtasks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: newSubtaskTitle.trim() }),
+    });
+    if (res.ok) {
+      const subtask: SubtaskData = await res.json();
+      setTask((prev) =>
+        prev ? { ...prev, subtasks: [...prev.subtasks, subtask] } : prev,
+      );
+      setNewSubtaskTitle("");
+    }
+  };
+
+  const toggleSubtask = async (subtaskId: string, done: boolean) => {
+    setTask((prev) =>
+      prev
+        ? {
+            ...prev,
+            subtasks: prev.subtasks.map((s) =>
+              s.id === subtaskId ? { ...s, done } : s,
+            ),
+          }
+        : prev,
+    );
+    await fetch(`/api/tasks/${taskId}/subtasks`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subtaskId, done }),
+    });
+  };
+
+  const removeSubtask = async (subtaskId: string) => {
+    const res = await fetch(`/api/tasks/${taskId}/subtasks`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subtaskId }),
+    });
+    if (res.ok) {
+      setTask((prev) =>
+        prev
+          ? {
+              ...prev,
+              subtasks: prev.subtasks.filter((s) => s.id !== subtaskId),
+            }
+          : prev,
+      );
     }
   };
 
@@ -351,6 +465,82 @@ export default function TaskDetailPanel({
               </select>
             </div>
 
+            {/* Due Date */}
+            <div className="field-group">
+              <label>Due Date</label>
+              <input
+                type="date"
+                className="field-input"
+                value={
+                  task.dueDate
+                    ? new Date(task.dueDate).toISOString().split("T")[0]
+                    : ""
+                }
+                onChange={(e) => updateField("dueDate", e.target.value || null)}
+              />
+              {task.dueDate && (
+                <span
+                  className={`due-date-badge ${
+                    new Date(task.dueDate) < new Date() &&
+                    task.status !== "DONE"
+                      ? "overdue"
+                      : ""
+                  }`}
+                >
+                  {new Date(task.dueDate) < new Date() && task.status !== "DONE"
+                    ? "Overdue"
+                    : `Due ${formatDate(task.dueDate)}`}
+                </span>
+              )}
+            </div>
+
+            {/* Labels */}
+            <div className="field-group">
+              <label>Labels</label>
+              <div className="labels-list">
+                {task.labels.map((l) => (
+                  <span
+                    key={l.id}
+                    className="label-chip"
+                    style={{ backgroundColor: l.color }}
+                  >
+                    {l.name}
+                    <button
+                      className="label-remove"
+                      onClick={() => removeLabel(l.id)}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <div className="label-add">
+                <input
+                  type="text"
+                  className="field-input label-input"
+                  placeholder="New label..."
+                  value={newLabelName}
+                  onChange={(e) => setNewLabelName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") addLabel();
+                  }}
+                />
+                <input
+                  type="color"
+                  className="label-color-picker"
+                  value={newLabelColor}
+                  onChange={(e) => setNewLabelColor(e.target.value)}
+                />
+                <button
+                  className="label-add-btn"
+                  onClick={addLabel}
+                  disabled={!newLabelName.trim()}
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
             {/* Description */}
             <div className="field-group">
               <label>Description</label>
@@ -366,6 +556,75 @@ export default function TaskDetailPanel({
                 }
                 onBlur={(e) => updateField("description", e.target.value)}
               />
+            </div>
+
+            {/* Subtasks */}
+            <div className="field-group">
+              <label>
+                Subtasks
+                {task.subtasks.length > 0 && (
+                  <span className="subtask-progress">
+                    {" "}
+                    ({task.subtasks.filter((s) => s.done).length}/
+                    {task.subtasks.length})
+                  </span>
+                )}
+              </label>
+              {task.subtasks.length > 0 && (
+                <div className="subtask-bar">
+                  <div
+                    className="subtask-bar-fill"
+                    style={{
+                      width: `${
+                        (task.subtasks.filter((s) => s.done).length /
+                          task.subtasks.length) *
+                        100
+                      }%`,
+                    }}
+                  />
+                </div>
+              )}
+              <div className="subtask-list">
+                {task.subtasks.map((s) => (
+                  <div key={s.id} className="subtask-item">
+                    <input
+                      type="checkbox"
+                      checked={s.done}
+                      onChange={(e) => toggleSubtask(s.id, e.target.checked)}
+                    />
+                    <span
+                      className={`subtask-title ${s.done ? "subtask-done" : ""}`}
+                    >
+                      {s.title}
+                    </span>
+                    <button
+                      className="subtask-remove"
+                      onClick={() => removeSubtask(s.id)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="subtask-add">
+                <input
+                  type="text"
+                  className="field-input"
+                  placeholder="Add subtask..."
+                  value={newSubtaskTitle}
+                  onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") addSubtask();
+                  }}
+                />
+                <button
+                  className="subtask-add-btn"
+                  onClick={addSubtask}
+                  disabled={!newSubtaskTitle.trim()}
+                >
+                  +
+                </button>
+              </div>
             </div>
 
             {/* Created date */}

@@ -10,6 +10,7 @@ type Task = {
   title: string;
   status: "TODO" | "IN_PROGRESS" | "DONE";
   priority: "LOW" | "MEDIUM" | "HIGH";
+  dueDate: string | null;
   assignee: {
     id: string;
     name: string | null;
@@ -18,6 +19,7 @@ type Task = {
   } | null;
   _count: { comments: number };
   githubIssueUrl: string | null;
+  labels: { id: string; name: string; color: string }[];
 };
 
 type GitHubStatus = {
@@ -663,6 +665,35 @@ export default function ProjectPage() {
                         </button>
                       )}
                     </div>
+                    {task.labels.length > 0 && (
+                      <div className="task-card-labels">
+                        {task.labels.map((l) => (
+                          <span
+                            key={l.id}
+                            className="task-label-chip"
+                            style={{ backgroundColor: l.color }}
+                          >
+                            {l.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {task.dueDate && (
+                      <span
+                        className={`task-card-due ${
+                          new Date(task.dueDate) < new Date() &&
+                          task.status !== "DONE"
+                            ? "overdue"
+                            : ""
+                        }`}
+                      >
+                        📅{" "}
+                        {new Date(task.dueDate).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </span>
+                    )}
                     <div className="task-card-bottom">
                       <div className="task-card-meta">
                         {task.githubIssueUrl && (

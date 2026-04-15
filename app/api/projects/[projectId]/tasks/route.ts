@@ -45,6 +45,10 @@ export async function GET(
         assignee: {
           select: { id: true, name: true, email: true, image: true },
         },
+        labels: {
+          select: { id: true, name: true, color: true },
+          orderBy: { name: "asc" },
+        },
         _count: { select: { comments: true } },
       },
     });

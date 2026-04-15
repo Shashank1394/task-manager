@@ -61,6 +61,8 @@ export async function GET(
             user: { select: { id: true, name: true, image: true } },
           },
         },
+        labels: { orderBy: { name: "asc" } },
+        subtasks: { orderBy: { createdAt: "asc" } },
       },
     });
 
@@ -118,6 +120,8 @@ export async function PATCH(
       data.priority = body.priority as TaskPriority;
     if (body.assigneeId !== undefined)
       data.assigneeId = body.assigneeId || null;
+    if (body.dueDate !== undefined)
+      data.dueDate = body.dueDate ? new Date(body.dueDate) : null;
 
     const updated = await prisma.task.update({
       where: { id: taskId },
