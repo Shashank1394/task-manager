@@ -123,6 +123,11 @@ export async function PATCH(
     if (body.dueDate !== undefined)
       data.dueDate = body.dueDate ? new Date(body.dueDate) : null;
     if (body.sprintId !== undefined) data.sprintId = body.sprintId || null;
+    if (body.estimatedHours !== undefined)
+      data.estimatedHours =
+        body.estimatedHours !== null ? Number(body.estimatedHours) : null;
+    if (body.loggedHours !== undefined)
+      data.loggedHours = Math.max(0, Number(body.loggedHours) || 0);
 
     const updated = await prisma.task.update({
       where: { id: taskId },

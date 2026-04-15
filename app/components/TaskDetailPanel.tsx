@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 
 type Comment = {
   id: string;
@@ -39,6 +39,8 @@ type TaskDetail = {
   status: "TODO" | "IN_PROGRESS" | "DONE";
   priority: "LOW" | "MEDIUM" | "HIGH";
   dueDate: string | null;
+  estimatedHours: number | null;
+  loggedHours: number;
   assigneeId: string | null;
   assignee: {
     id: string;
@@ -120,12 +122,16 @@ export default function TaskDetailPanel({
   // Subtasks
   const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
 
+  // Track original task for dirty detection
+  const originalTaskRef = useRef<TaskDetail | null>(null);
+
   const loadTask = useCallback(async () => {
     try {
       const res = await fetch(`/api/tasks/${taskId}`);
       if (!res.ok) return;
       const data: TaskDetail = await res.json();
       setTask(data);
+      originalTaskRef.current = data;
 
       // Load org members for assignee dropdown
       const orgId = data.board.project.organizationId;
@@ -146,32 +152,35 @@ export default function TaskDetailPanel({
     loadTask();
   }, [loadTask]);
 
-  const updateField = async (field: string, value: string | null) => {
+  const saveAllChanges = async () => {
     if (!task) return;
     setSaving(true);
 
     const res = await fetch(`/api/tasks/${taskId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ [field]: value }),
+      body: JSON.stringify({
+        title: task.title,
+        description: task.description,
+        status: task.status,
+        priority: task.priority,
+        assigneeId: task.assigneeId,
+        dueDate: task.dueDate,
+        estimatedHours: task.estimatedHours,
+        loggedHours: task.loggedHours,
+      }),
     });
 
     if (res.ok) {
       const updated = await res.json();
       setTask((prev) => (prev ? { ...prev, ...updated } : prev));
+      originalTaskRef.current = { ...task, ...updated };
       onTaskUpdated({
         id: task.id,
-        title: field === "title" ? (value as string) : task.title,
-        status:
-          field === "status" ? (value as TaskDetail["status"]) : task.status,
-        priority:
-          field === "priority"
-            ? (value as TaskDetail["priority"])
-            : task.priority,
-        dueDate:
-          field === "dueDate"
-            ? (value as string | null)
-            : (task.dueDate ?? null),
+        title: task.title,
+        status: task.status,
+        priority: task.priority,
+        dueDate: task.dueDate ?? null,
         assignee: updated.assignee ?? task.assignee,
         _count: { comments: task.comments.length },
         githubIssueUrl: task.githubIssueUrl,
@@ -186,6 +195,18 @@ export default function TaskDetailPanel({
     }
     setSaving(false);
   };
+
+  const isDirty =
+    task && originalTaskRef.current
+      ? task.title !== originalTaskRef.current.title ||
+        task.description !== originalTaskRef.current.description ||
+        task.status !== originalTaskRef.current.status ||
+        task.priority !== originalTaskRef.current.priority ||
+        task.assigneeId !== originalTaskRef.current.assigneeId ||
+        task.dueDate !== originalTaskRef.current.dueDate ||
+        task.estimatedHours !== originalTaskRef.current.estimatedHours ||
+        task.loggedHours !== originalTaskRef.current.loggedHours
+      : false;
 
   const addComment = async () => {
     if (!commentText.trim()) return;
@@ -377,9 +398,20 @@ export default function TaskDetailPanel({
         {/* Header */}
         <div className="panel-header">
           <h4>Task Details</h4>
-          <button className="panel-close" onClick={onClose}>
-            &times;
-          </button>
+          <div className="panel-header-actions">
+            {isDirty && (
+              <button
+                className="panel-save-btn"
+                onClick={saveAllChanges}
+                disabled={saving}
+              >
+                {saving ? "Saving..." : "Save Changes"}
+              </button>
+            )}
+            <button className="panel-close" onClick={onClose}>
+              &times;
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -426,7 +458,6 @@ export default function TaskDetailPanel({
                     prev ? { ...prev, title: e.target.value } : prev,
                   )
                 }
-                onBlur={(e) => updateField("title", e.target.value)}
               />
             </div>
 
@@ -437,7 +468,16 @@ export default function TaskDetailPanel({
                 <select
                   className="field-input"
                   value={task.status}
-                  onChange={(e) => updateField("status", e.target.value)}
+                  onChange={(e) =>
+                    setTask((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            status: e.target.value as TaskDetail["status"],
+                          }
+                        : prev,
+                    )
+                  }
                 >
                   <option value="TODO">TODO</option>
                   <option value="IN_PROGRESS">IN PROGRESS</option>
@@ -450,7 +490,16 @@ export default function TaskDetailPanel({
                 <select
                   className="field-input"
                   value={task.priority}
-                  onChange={(e) => updateField("priority", e.target.value)}
+                  onChange={(e) =>
+                    setTask((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            priority: e.target.value as TaskDetail["priority"],
+                          }
+                        : prev,
+                    )
+                  }
                 >
                   <option value="LOW">Low</option>
                   <option value="MEDIUM">Medium</option>
@@ -466,7 +515,11 @@ export default function TaskDetailPanel({
                 className="field-input"
                 value={task.assigneeId ?? ""}
                 onChange={(e) =>
-                  updateField("assigneeId", e.target.value || null)
+                  setTask((prev) =>
+                    prev
+                      ? { ...prev, assigneeId: e.target.value || null }
+                      : prev,
+                  )
                 }
               >
                 <option value="">Unassigned</option>
@@ -489,7 +542,11 @@ export default function TaskDetailPanel({
                     ? new Date(task.dueDate).toISOString().split("T")[0]
                     : ""
                 }
-                onChange={(e) => updateField("dueDate", e.target.value || null)}
+                onChange={(e) =>
+                  setTask((prev) =>
+                    prev ? { ...prev, dueDate: e.target.value || null } : prev,
+                  )
+                }
               />
               {task.dueDate && (
                 <span
@@ -504,6 +561,79 @@ export default function TaskDetailPanel({
                     ? "Overdue"
                     : `Due ${formatDate(task.dueDate)}`}
                 </span>
+              )}
+            </div>
+
+            {/* Time Tracking */}
+            <div className="field-group">
+              <label>Time Tracking</label>
+              <div className="time-tracking-row">
+                <div className="time-input-group">
+                  <span className="time-label">Estimated</span>
+                  <input
+                    type="number"
+                    className="field-input time-input"
+                    min="0"
+                    step="0.5"
+                    placeholder="hrs"
+                    value={task.estimatedHours ?? ""}
+                    onChange={(e) => {
+                      const val = e.target.value
+                        ? Number(e.target.value)
+                        : null;
+                      setTask((prev) =>
+                        prev ? { ...prev, estimatedHours: val } : prev,
+                      );
+                    }}
+                  />
+                </div>
+                <div className="time-input-group">
+                  <span className="time-label">Logged</span>
+                  <input
+                    type="number"
+                    className="field-input time-input"
+                    min="0"
+                    step="0.5"
+                    placeholder="hrs"
+                    value={task.loggedHours || ""}
+                    onChange={(e) => {
+                      const val = Number(e.target.value) || 0;
+                      setTask((prev) =>
+                        prev ? { ...prev, loggedHours: val } : prev,
+                      );
+                    }}
+                  />
+                </div>
+              </div>
+              {task.estimatedHours && task.estimatedHours > 0 && (
+                <div className="time-progress">
+                  <div className="time-progress-bar">
+                    <div
+                      className={`time-progress-fill ${
+                        task.loggedHours > task.estimatedHours ? "over" : ""
+                      }`}
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          (task.loggedHours / task.estimatedHours) * 100,
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                  <span className="time-progress-text">
+                    {task.loggedHours}h / {task.estimatedHours}h
+                    {task.loggedHours > task.estimatedHours && (
+                      <span className="time-over">
+                        {" "}
+                        (over by{" "}
+                        {Math.round(
+                          (task.loggedHours - task.estimatedHours) * 10,
+                        ) / 10}
+                        h)
+                      </span>
+                    )}
+                  </span>
+                </div>
               )}
             </div>
 
@@ -567,7 +697,6 @@ export default function TaskDetailPanel({
                     prev ? { ...prev, description: e.target.value } : prev,
                   )
                 }
-                onBlur={(e) => updateField("description", e.target.value)}
               />
             </div>
 
@@ -659,8 +788,6 @@ export default function TaskDetailPanel({
                 </a>
               </div>
             )}
-
-            {saving && <div className="field-meta">Saving...</div>}
 
             {/* Comments */}
             <div className="comments-section">

@@ -29,6 +29,8 @@ export async function GET() {
                         priority: true,
                         assigneeId: true,
                         createdAt: true,
+                        estimatedHours: true,
+                        loggedHours: true,
                         board: {
                           select: {
                             project: {
@@ -78,6 +80,11 @@ export async function GET() {
       m.organization.projects.map((p) => {
         const tasks = p.board?.tasks ?? [];
         const done = tasks.filter((t) => t.status === "DONE").length;
+        const estimated = tasks.reduce(
+          (sum, t) => sum + (t.estimatedHours ?? 0),
+          0,
+        );
+        const logged = tasks.reduce((sum, t) => sum + t.loggedHours, 0);
         return {
           id: p.id,
           name: p.name,
@@ -86,6 +93,8 @@ export async function GET() {
           completedTasks: done,
           completionPct:
             tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0,
+          estimatedHours: Math.round(estimated * 10) / 10,
+          loggedHours: Math.round(logged * 10) / 10,
         };
       }),
     );
@@ -101,6 +110,8 @@ export async function GET() {
         priority: t.priority,
         projectName: t.board.project.name,
         projectId: t.board.project.id,
+        estimatedHours: t.estimatedHours,
+        loggedHours: t.loggedHours,
       }));
 
     // Recent completed (top 5)
@@ -117,6 +128,13 @@ export async function GET() {
         projectName: t.board.project.name,
       }));
 
+    // Time tracking totals
+    const totalEstimated = allTasks.reduce(
+      (sum, t) => sum + (t.estimatedHours ?? 0),
+      0,
+    );
+    const totalLogged = allTasks.reduce((sum, t) => sum + t.loggedHours, 0);
+
     return NextResponse.json({
       totalTasks,
       byStatus,
@@ -125,6 +143,10 @@ export async function GET() {
       recentCompleted,
       projectSummaries,
       orgCount: memberships.length,
+      timeTracking: {
+        totalEstimated: Math.round(totalEstimated * 10) / 10,
+        totalLogged: Math.round(totalLogged * 10) / 10,
+      },
     });
   } catch (error) {
     if (error instanceof Error && error.message === "UNAUTHORIZED") {

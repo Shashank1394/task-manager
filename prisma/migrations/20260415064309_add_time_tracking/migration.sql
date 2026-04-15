@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Task" ADD COLUMN     "estimatedHours" DOUBLE PRECISION,
+ADD COLUMN     "loggedHours" DOUBLE PRECISION NOT NULL DEFAULT 0;

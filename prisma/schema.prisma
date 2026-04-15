@@ -211,9 +211,11 @@ model Task {
   title       String
   description String?
   status      TaskStatus    @default(TODO)
-  priority    TaskPriority  @default(MEDIUM)
-  dueDate     DateTime?
-  createdAt   DateTime      @default(now())
+  priority       TaskPriority  @default(MEDIUM)
+  dueDate        DateTime?
+  estimatedHours Float?
+  loggedHours    Float         @default(0)
+  createdAt      DateTime      @default(now())
 
   boardId     String
   board       Board         @relation(fields: [boardId], references: [id], onDelete: Cascade)

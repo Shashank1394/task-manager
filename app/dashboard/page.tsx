@@ -14,6 +14,8 @@ type DashboardData = {
     priority: string;
     projectName: string;
     projectId: string;
+    estimatedHours: number | null;
+    loggedHours: number;
   }[];
   recentCompleted: {
     id: string;
@@ -27,8 +29,14 @@ type DashboardData = {
     totalTasks: number;
     completedTasks: number;
     completionPct: number;
+    estimatedHours: number;
+    loggedHours: number;
   }[];
   orgCount: number;
+  timeTracking: {
+    totalEstimated: number;
+    totalLogged: number;
+  };
 };
 
 export default function DashboardHome() {
@@ -43,12 +51,23 @@ export default function DashboardHome() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <p>Loading dashboard...</p>;
+  if (loading) return <p className="dash-loading">Loading dashboard...</p>;
   if (!data) return <p>Failed to load dashboard.</p>;
 
+  const byStatus = data.byStatus ?? { TODO: 0, IN_PROGRESS: 0, DONE: 0 };
+  const byPriority = data.byPriority ?? { HIGH: 0, MEDIUM: 0, LOW: 0 };
+  const totalTasks = data.totalTasks ?? 0;
+  const myActiveTasks = data.myActiveTasks ?? [];
+  const recentCompleted = data.recentCompleted ?? [];
+  const projectSummaries = data.projectSummaries ?? [];
+  const tt = data.timeTracking ?? { totalEstimated: 0, totalLogged: 0 };
+
   const completionPct =
-    data.totalTasks > 0
-      ? Math.round((data.byStatus.DONE / data.totalTasks) * 100)
+    totalTasks > 0 ? Math.round((byStatus.DONE / totalTasks) * 100) : 0;
+
+  const timeUtilization =
+    tt.totalEstimated > 0
+      ? Math.round((tt.totalLogged / tt.totalEstimated) * 100)
       : 0;
 
   return (
@@ -58,24 +77,111 @@ export default function DashboardHome() {
       {/* Stats Row */}
       <div className="dash-stats">
         <div className="stat-card">
-          <span className="stat-value">{data.totalTasks}</span>
+          <span className="stat-value">{totalTasks}</span>
           <span className="stat-label">Total Tasks</span>
         </div>
         <div className="stat-card stat-todo">
-          <span className="stat-value">{data.byStatus.TODO}</span>
+          <span className="stat-value">{byStatus.TODO}</span>
           <span className="stat-label">To Do</span>
         </div>
         <div className="stat-card stat-progress">
-          <span className="stat-value">{data.byStatus.IN_PROGRESS}</span>
+          <span className="stat-value">{byStatus.IN_PROGRESS}</span>
           <span className="stat-label">In Progress</span>
         </div>
         <div className="stat-card stat-done">
-          <span className="stat-value">{data.byStatus.DONE}</span>
+          <span className="stat-value">{byStatus.DONE}</span>
           <span className="stat-label">Completed</span>
         </div>
         <div className="stat-card">
           <span className="stat-value">{completionPct}%</span>
           <span className="stat-label">Completion</span>
+        </div>
+        <div className="stat-card stat-time">
+          <span className="stat-value">{tt.totalLogged}h</span>
+          <span className="stat-label">Hours Logged</span>
+        </div>
+      </div>
+
+      {/* Time Tracking Overview — full width */}
+      <div className="dash-card dash-card-full">
+        <h3>Time Overview</h3>
+        <div className="time-overview">
+          <div className="time-overview-summary">
+            <div className="time-overview-stat">
+              <span className="time-stat-value">{tt.totalEstimated}h</span>
+              <span className="time-stat-label">Estimated</span>
+            </div>
+            <div className="time-overview-stat">
+              <span className="time-stat-value">{tt.totalLogged}h</span>
+              <span className="time-stat-label">Logged</span>
+            </div>
+            <div className="time-overview-stat">
+              <span
+                className={`time-stat-value ${timeUtilization > 100 ? "over" : ""}`}
+              >
+                {timeUtilization}%
+              </span>
+              <span className="time-stat-label">Utilization</span>
+            </div>
+          </div>
+
+          {/* Per-project time bars */}
+          <div className="time-project-bars">
+            {projectSummaries
+              .filter((p) => p.estimatedHours > 0 || p.loggedHours > 0)
+              .map((p) => {
+                const maxHours = Math.max(p.estimatedHours, p.loggedHours, 1);
+                const estPct = (p.estimatedHours / maxHours) * 100;
+                const logPct = (p.loggedHours / maxHours) * 100;
+                const isOver = p.loggedHours > p.estimatedHours;
+                return (
+                  <div key={p.id} className="time-project-row">
+                    <Link
+                      href={`/dashboard/project/${p.id}`}
+                      className="time-project-name"
+                    >
+                      {p.name}
+                    </Link>
+                    <div className="time-bar-container">
+                      <div className="time-bar-track">
+                        <div
+                          className="time-bar-estimated"
+                          style={{ width: `${estPct}%` }}
+                          title={`Estimated: ${p.estimatedHours}h`}
+                        />
+                        <div
+                          className={`time-bar-logged ${isOver ? "over" : ""}`}
+                          style={{ width: `${logPct}%` }}
+                          title={`Logged: ${p.loggedHours}h`}
+                        />
+                      </div>
+                    </div>
+                    <span className="time-bar-label">
+                      {p.loggedHours}h / {p.estimatedHours}h
+                    </span>
+                  </div>
+                );
+              })}
+            {projectSummaries.every(
+              (p) =>
+                (p.estimatedHours ?? 0) === 0 && (p.loggedHours ?? 0) === 0,
+            ) && (
+              <p className="dash-empty">
+                No time estimates yet. Add estimates to your tasks to see the
+                breakdown.
+              </p>
+            )}
+          </div>
+
+          {/* Legend */}
+          <div className="time-legend">
+            <span className="time-legend-item">
+              <span className="time-legend-swatch estimated" /> Estimated
+            </span>
+            <span className="time-legend-item">
+              <span className="time-legend-swatch logged" /> Logged
+            </span>
+          </div>
         </div>
       </div>
 
@@ -83,11 +189,11 @@ export default function DashboardHome() {
         {/* My Tasks */}
         <div className="dash-card">
           <h3>My Tasks</h3>
-          {data.myActiveTasks.length === 0 ? (
+          {myActiveTasks.length === 0 ? (
             <p className="dash-empty">No tasks assigned to you.</p>
           ) : (
             <div className="dash-task-list">
-              {data.myActiveTasks.map((t) => (
+              {myActiveTasks.map((t) => (
                 <Link
                   key={t.id}
                   href={`/dashboard/project/${t.projectId}`}
@@ -105,6 +211,12 @@ export default function DashboardHome() {
                       >
                         {t.status.replace("_", " ")}
                       </span>
+                      {t.estimatedHours != null && (
+                        <span className="dash-task-time">
+                          {" "}
+                          · {t.loggedHours}/{t.estimatedHours}h
+                        </span>
+                      )}
                     </span>
                   </div>
                 </Link>
@@ -116,11 +228,11 @@ export default function DashboardHome() {
         {/* Projects */}
         <div className="dash-card">
           <h3>Projects</h3>
-          {data.projectSummaries.length === 0 ? (
+          {projectSummaries.length === 0 ? (
             <p className="dash-empty">No projects yet.</p>
           ) : (
             <div className="dash-project-list">
-              {data.projectSummaries.map((p) => (
+              {projectSummaries.map((p) => (
                 <Link
                   key={p.id}
                   href={`/dashboard/project/${p.id}`}
@@ -157,11 +269,11 @@ export default function DashboardHome() {
                 <div
                   className="priority-fill priority-high-fill"
                   style={{
-                    width: `${data.totalTasks > 0 ? (data.byPriority.HIGH / data.totalTasks) * 100 : 0}%`,
+                    width: `${totalTasks > 0 ? (byPriority.HIGH / totalTasks) * 100 : 0}%`,
                   }}
                 />
               </div>
-              <span className="priority-count">{data.byPriority.HIGH}</span>
+              <span className="priority-count">{byPriority.HIGH}</span>
             </div>
             <div className="priority-row">
               <span className="priority-label">Medium</span>
@@ -169,11 +281,11 @@ export default function DashboardHome() {
                 <div
                   className="priority-fill priority-medium-fill"
                   style={{
-                    width: `${data.totalTasks > 0 ? (data.byPriority.MEDIUM / data.totalTasks) * 100 : 0}%`,
+                    width: `${totalTasks > 0 ? (byPriority.MEDIUM / totalTasks) * 100 : 0}%`,
                   }}
                 />
               </div>
-              <span className="priority-count">{data.byPriority.MEDIUM}</span>
+              <span className="priority-count">{byPriority.MEDIUM}</span>
             </div>
             <div className="priority-row">
               <span className="priority-label">Low</span>
@@ -181,11 +293,11 @@ export default function DashboardHome() {
                 <div
                   className="priority-fill priority-low-fill"
                   style={{
-                    width: `${data.totalTasks > 0 ? (data.byPriority.LOW / data.totalTasks) * 100 : 0}%`,
+                    width: `${totalTasks > 0 ? (byPriority.LOW / totalTasks) * 100 : 0}%`,
                   }}
                 />
               </div>
-              <span className="priority-count">{data.byPriority.LOW}</span>
+              <span className="priority-count">{byPriority.LOW}</span>
             </div>
           </div>
         </div>
@@ -193,11 +305,11 @@ export default function DashboardHome() {
         {/* Recent Completed */}
         <div className="dash-card">
           <h3>Recently Completed</h3>
-          {data.recentCompleted.length === 0 ? (
+          {recentCompleted.length === 0 ? (
             <p className="dash-empty">No completed tasks yet.</p>
           ) : (
             <div className="dash-task-list">
-              {data.recentCompleted.map((t) => (
+              {recentCompleted.map((t) => (
                 <div key={t.id} className="dash-task-item completed">
                   <span className="completed-check">&#10003;</span>
                   <div className="dash-task-info">
