@@ -9,9 +9,51 @@
   padding: 2rem;
 }
 
+// ─── Header ──────────────────────────────────────────────────
+.dash-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
 .dash-title {
   font-size: 1.5rem;
-  margin: 0 0 1.5rem;
+  margin: 0;
+}
+
+.dash-date {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin: 0.2rem 0 0;
+}
+
+.dash-alert {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #ef4444;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.4rem 0.85rem;
+  border-radius: 0.4rem;
+  white-space: nowrap;
+}
+
+.dash-alert-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 800;
+  flex-shrink: 0;
 }
 
 // ─── Stats Row ───────────────────────────────────────────────
@@ -429,4 +471,170 @@
   width: 24px;
   text-align: right;
   color: var(--text-secondary, #666);
+}
+
+// ─── Completion Ring ─────────────────────────────────────────
+.stat-completion-ring {
+  width: 52px;
+  height: 52px;
+}
+
+.completion-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.ring-bg {
+  fill: none;
+  stroke: var(--bg-muted, #eee);
+  stroke-width: 3;
+}
+
+.ring-fill {
+  fill: none;
+  stroke: #22c55e;
+  stroke-width: 3;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.6s ease;
+}
+
+.ring-text {
+  fill: var(--text-primary);
+  font-size: 9px;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+// ─── Sprint Cards ────────────────────────────────────────────
+.sprint-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.sprint-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.85rem;
+  background: var(--bg-muted);
+  border: 1px solid var(--border-color);
+  border-radius: 0.4rem;
+  text-decoration: none;
+  color: var(--text-primary);
+  transition: border-color 0.15s;
+
+  &:hover {
+    border-color: var(--accent);
+  }
+}
+
+.sprint-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.sprint-card-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.sprint-card-project {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.sprint-card-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  .progress-bar {
+    flex: 1;
+  }
+}
+
+.sprint-card-stat {
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.sprint-card-date {
+  font-size: 0.68rem;
+  color: var(--text-muted, #999);
+}
+
+// ─── Overdue / Due Soon ──────────────────────────────────────
+.overdue-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: 0.5rem;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  border-radius: 9px;
+  vertical-align: middle;
+}
+
+.overdue-item {
+  border-left: 2px solid #ef4444 !important;
+  padding-left: 0.5rem;
+}
+
+.overdue-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  font-size: 0.65rem;
+  font-weight: 800;
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+
+.dash-task-due {
+  font-size: 0.68rem;
+  color: var(--text-muted, #999);
+
+  &.overdue {
+    color: #ef4444;
+    font-weight: 600;
+  }
+}
+
+// ─── Completed Grid ──────────────────────────────────────────
+.dash-completed-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0;
+
+  .dash-completed-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.5rem 0.5rem;
+    border-bottom: 1px solid var(--border-color, #eee);
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    .completed-check {
+      color: #22c55e;
+      font-weight: 700;
+      margin-top: 0.1rem;
+    }
+  }
 }

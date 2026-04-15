@@ -29,6 +29,7 @@ export async function GET() {
                         priority: true,
                         assigneeId: true,
                         createdAt: true,
+                        dueDate: true,
                         estimatedHours: true,
                         loggedHours: true,
                         board: {
@@ -112,6 +113,7 @@ export async function GET() {
         projectId: t.board.project.id,
         estimatedHours: t.estimatedHours,
         loggedHours: t.loggedHours,
+        dueDate: t.dueDate,
       }));
 
     // Recent completed (top 5)
@@ -128,6 +130,73 @@ export async function GET() {
         projectName: t.board.project.name,
       }));
 
+    // Overdue & due-soon tasks
+    const now = new Date();
+    const sevenDaysOut = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const openTasks = allTasks.filter((t) => t.status !== "DONE" && t.dueDate);
+    const overdueTasks = openTasks
+      .filter((t) => new Date(t.dueDate!) < now)
+      .map((t) => ({
+        id: t.id,
+        title: t.title,
+        dueDate: t.dueDate,
+        status: t.status,
+        priority: t.priority,
+        projectName: t.board.project.name,
+        projectId: t.board.project.id,
+      }));
+    const dueSoonTasks = openTasks
+      .filter((t) => {
+        const d = new Date(t.dueDate!);
+        return d >= now && d <= sevenDaysOut;
+      })
+      .sort(
+        (a, b) =>
+          new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime(),
+      )
+      .slice(0, 5)
+      .map((t) => ({
+        id: t.id,
+        title: t.title,
+        dueDate: t.dueDate,
+        status: t.status,
+        priority: t.priority,
+        projectName: t.board.project.name,
+        projectId: t.board.project.id,
+      }));
+
+    // Active sprints
+    const activeSprints = await prisma.sprint.findMany({
+      where: {
+        status: "ACTIVE",
+        project: {
+          organization: {
+            members: { some: { userId, role: { not: "CLIENT" } } },
+          },
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        endDate: true,
+        project: { select: { id: true, name: true } },
+        tasks: {
+          select: { status: true },
+        },
+      },
+      take: 3,
+    });
+
+    const sprintSummaries = activeSprints.map((s) => ({
+      id: s.id,
+      name: s.name,
+      endDate: s.endDate,
+      projectName: s.project.name,
+      projectId: s.project.id,
+      totalTasks: s.tasks.length,
+      completedTasks: s.tasks.filter((t) => t.status === "DONE").length,
+    }));
+
     // Time tracking totals
     const totalEstimated = allTasks.reduce(
       (sum, t) => sum + (t.estimatedHours ?? 0),
@@ -143,6 +212,9 @@ export async function GET() {
       recentCompleted,
       projectSummaries,
       orgCount: memberships.length,
+      overdueTasks,
+      dueSoonTasks,
+      activeSprints: sprintSummaries,
       timeTracking: {
         totalEstimated: Math.round(totalEstimated * 10) / 10,
         totalLogged: Math.round(totalLogged * 10) / 10,

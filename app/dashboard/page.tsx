@@ -16,6 +16,7 @@ type DashboardData = {
     projectId: string;
     estimatedHours: number | null;
     loggedHours: number;
+    dueDate: string | null;
   }[];
   recentCompleted: {
     id: string;
@@ -32,12 +33,50 @@ type DashboardData = {
     estimatedHours: number;
     loggedHours: number;
   }[];
+  overdueTasks: {
+    id: string;
+    title: string;
+    dueDate: string;
+    status: string;
+    priority: string;
+    projectName: string;
+    projectId: string;
+  }[];
+  dueSoonTasks: {
+    id: string;
+    title: string;
+    dueDate: string;
+    status: string;
+    priority: string;
+    projectName: string;
+    projectId: string;
+  }[];
+  activeSprints: {
+    id: string;
+    name: string;
+    endDate: string | null;
+    projectName: string;
+    projectId: string;
+    totalTasks: number;
+    completedTasks: number;
+  }[];
   orgCount: number;
   timeTracking: {
     totalEstimated: number;
     totalLogged: number;
   };
 };
+
+function formatRelativeDate(dateStr: string) {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diffMs = d.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) return `${Math.abs(diffDays)}d overdue`;
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Tomorrow";
+  return `${diffDays}d left`;
+}
 
 export default function DashboardHome() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -60,6 +99,9 @@ export default function DashboardHome() {
   const myActiveTasks = data.myActiveTasks ?? [];
   const recentCompleted = data.recentCompleted ?? [];
   const projectSummaries = data.projectSummaries ?? [];
+  const overdueTasks = data.overdueTasks ?? [];
+  const dueSoonTasks = data.dueSoonTasks ?? [];
+  const activeSprints = data.activeSprints ?? [];
   const tt = data.timeTracking ?? { totalEstimated: 0, totalLogged: 0 };
 
   const completionPct =
@@ -70,9 +112,35 @@ export default function DashboardHome() {
       ? Math.round((tt.totalLogged / tt.totalEstimated) * 100)
       : 0;
 
+  const today = new Date();
+  const greeting =
+    today.getHours() < 12
+      ? "Good morning"
+      : today.getHours() < 18
+        ? "Good afternoon"
+        : "Good evening";
+
+  const dateString = today.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+
   return (
     <div className="dash">
-      <h1 className="dash-title">Dashboard</h1>
+      {/* Header */}
+      <div className="dash-header">
+        <div>
+          <h1 className="dash-title">{greeting}</h1>
+          <p className="dash-date">{dateString}</p>
+        </div>
+        {overdueTasks.length > 0 && (
+          <div className="dash-alert">
+            <span className="dash-alert-icon">!</span>
+            {overdueTasks.length} overdue task{overdueTasks.length > 1 && "s"}
+          </div>
+        )}
+      </div>
 
       {/* Stats Row */}
       <div className="dash-stats">
@@ -93,7 +161,22 @@ export default function DashboardHome() {
           <span className="stat-label">Completed</span>
         </div>
         <div className="stat-card">
-          <span className="stat-value">{completionPct}%</span>
+          <div className="stat-completion-ring">
+            <svg viewBox="0 0 36 36" className="completion-svg">
+              <path
+                className="ring-bg"
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+              />
+              <path
+                className="ring-fill"
+                strokeDasharray={`${completionPct}, 100`}
+                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+              />
+              <text x="18" y="20.5" className="ring-text">
+                {completionPct}%
+              </text>
+            </svg>
+          </div>
           <span className="stat-label">Completion</span>
         </div>
         <div className="stat-card stat-time">
@@ -101,6 +184,49 @@ export default function DashboardHome() {
           <span className="stat-label">Hours Logged</span>
         </div>
       </div>
+
+      {/* Active Sprints */}
+      {activeSprints.length > 0 && (
+        <div className="dash-card dash-card-full">
+          <h3>Active Sprints</h3>
+          <div className="sprint-cards">
+            {activeSprints.map((s) => {
+              const sprintPct =
+                s.totalTasks > 0
+                  ? Math.round((s.completedTasks / s.totalTasks) * 100)
+                  : 0;
+              return (
+                <Link
+                  key={s.id}
+                  href={`/dashboard/project/${s.projectId}`}
+                  className="sprint-card"
+                >
+                  <div className="sprint-card-header">
+                    <span className="sprint-card-name">{s.name}</span>
+                    <span className="sprint-card-project">{s.projectName}</span>
+                  </div>
+                  <div className="sprint-card-bar">
+                    <div className="progress-bar">
+                      <div
+                        className="progress-fill"
+                        style={{ width: `${sprintPct}%` }}
+                      />
+                    </div>
+                    <span className="sprint-card-stat">
+                      {s.completedTasks}/{s.totalTasks} tasks
+                    </span>
+                  </div>
+                  {s.endDate && (
+                    <span className="sprint-card-date">
+                      {formatRelativeDate(s.endDate)}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Time Tracking Overview — full width */}
       <div className="dash-card dash-card-full">
@@ -217,6 +343,14 @@ export default function DashboardHome() {
                           · {t.loggedHours}/{t.estimatedHours}h
                         </span>
                       )}
+                      {t.dueDate && (
+                        <span
+                          className={`dash-task-due ${new Date(t.dueDate) < new Date() ? "overdue" : ""}`}
+                        >
+                          {" "}
+                          · {formatRelativeDate(t.dueDate)}
+                        </span>
+                      )}
                     </span>
                   </div>
                 </Link>
@@ -225,6 +359,62 @@ export default function DashboardHome() {
           )}
         </div>
 
+        {/* Due Soon / Overdue */}
+        <div className="dash-card">
+          <h3>
+            Upcoming Deadlines
+            {overdueTasks.length > 0 && (
+              <span className="overdue-badge">{overdueTasks.length}</span>
+            )}
+          </h3>
+          {overdueTasks.length === 0 && dueSoonTasks.length === 0 ? (
+            <p className="dash-empty">No upcoming deadlines.</p>
+          ) : (
+            <div className="dash-task-list">
+              {overdueTasks.map((t) => (
+                <Link
+                  key={t.id}
+                  href={`/dashboard/project/${t.projectId}`}
+                  className="dash-task-item overdue-item"
+                >
+                  <span className="overdue-icon">!</span>
+                  <div className="dash-task-info">
+                    <span className="dash-task-title">{t.title}</span>
+                    <span className="dash-task-meta">
+                      {t.projectName} ·{" "}
+                      <span className="dash-task-due overdue">
+                        {formatRelativeDate(t.dueDate)}
+                      </span>
+                    </span>
+                  </div>
+                </Link>
+              ))}
+              {dueSoonTasks.map((t) => (
+                <Link
+                  key={t.id}
+                  href={`/dashboard/project/${t.projectId}`}
+                  className="dash-task-item"
+                >
+                  <span
+                    className={`priority-dot priority-${t.priority.toLowerCase()}`}
+                  />
+                  <div className="dash-task-info">
+                    <span className="dash-task-title">{t.title}</span>
+                    <span className="dash-task-meta">
+                      {t.projectName} ·{" "}
+                      <span className="dash-task-due">
+                        {formatRelativeDate(t.dueDate)}
+                      </span>
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="dash-grid">
         {/* Projects */}
         <div className="dash-card">
           <h3>Projects</h3>
@@ -263,64 +453,48 @@ export default function DashboardHome() {
         <div className="dash-card">
           <h3>By Priority</h3>
           <div className="priority-bars">
-            <div className="priority-row">
-              <span className="priority-label">High</span>
-              <div className="priority-bar">
-                <div
-                  className="priority-fill priority-high-fill"
-                  style={{
-                    width: `${totalTasks > 0 ? (byPriority.HIGH / totalTasks) * 100 : 0}%`,
-                  }}
-                />
+            {(
+              [
+                ["High", "HIGH", byPriority.HIGH],
+                ["Medium", "MEDIUM", byPriority.MEDIUM],
+                ["Low", "LOW", byPriority.LOW],
+              ] as const
+            ).map(([label, key, count]) => (
+              <div key={key} className="priority-row">
+                <span className="priority-label">{label}</span>
+                <div className="priority-bar">
+                  <div
+                    className={`priority-fill priority-${key.toLowerCase()}-fill`}
+                    style={{
+                      width: `${totalTasks > 0 ? (count / totalTasks) * 100 : 0}%`,
+                    }}
+                  />
+                </div>
+                <span className="priority-count">{count}</span>
               </div>
-              <span className="priority-count">{byPriority.HIGH}</span>
-            </div>
-            <div className="priority-row">
-              <span className="priority-label">Medium</span>
-              <div className="priority-bar">
-                <div
-                  className="priority-fill priority-medium-fill"
-                  style={{
-                    width: `${totalTasks > 0 ? (byPriority.MEDIUM / totalTasks) * 100 : 0}%`,
-                  }}
-                />
-              </div>
-              <span className="priority-count">{byPriority.MEDIUM}</span>
-            </div>
-            <div className="priority-row">
-              <span className="priority-label">Low</span>
-              <div className="priority-bar">
-                <div
-                  className="priority-fill priority-low-fill"
-                  style={{
-                    width: `${totalTasks > 0 ? (byPriority.LOW / totalTasks) * 100 : 0}%`,
-                  }}
-                />
-              </div>
-              <span className="priority-count">{byPriority.LOW}</span>
-            </div>
+            ))}
           </div>
         </div>
+      </div>
 
-        {/* Recent Completed */}
-        <div className="dash-card">
-          <h3>Recently Completed</h3>
-          {recentCompleted.length === 0 ? (
-            <p className="dash-empty">No completed tasks yet.</p>
-          ) : (
-            <div className="dash-task-list">
-              {recentCompleted.map((t) => (
-                <div key={t.id} className="dash-task-item completed">
-                  <span className="completed-check">&#10003;</span>
-                  <div className="dash-task-info">
-                    <span className="dash-task-title">{t.title}</span>
-                    <span className="dash-task-meta">{t.projectName}</span>
-                  </div>
+      {/* Recently Completed — full width */}
+      <div className="dash-card dash-card-full">
+        <h3>Recently Completed</h3>
+        {recentCompleted.length === 0 ? (
+          <p className="dash-empty">No completed tasks yet.</p>
+        ) : (
+          <div className="dash-completed-grid">
+            {recentCompleted.map((t) => (
+              <div key={t.id} className="dash-completed-item">
+                <span className="completed-check">&#10003;</span>
+                <div className="dash-task-info">
+                  <span className="dash-task-title">{t.title}</span>
+                  <span className="dash-task-meta">{t.projectName}</span>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
