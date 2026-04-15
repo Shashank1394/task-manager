@@ -1043,302 +1043,305 @@ export default function ProjectPage() {
         </div>
       </div>
 
-      {/* GITHUB PANEL */}
-      <div className="github-panel">
-        <h5>GitHub</h5>
-
-        {!github?.repository ? (
-          <div className="github-connect">
-            <p className="github-empty">No repository connected</p>
+      {/* RIGHT SIDEBAR */}
+      <div className="project-sidebar">
+        {/* SPRINTS PANEL */}
+        <div className="sprints-panel">
+          <h5>Sprints</h5>
+          <div className="sprint-create">
             <input
               type="text"
-              className="github-connect-input"
-              placeholder="owner/repo or GitHub URL"
-              value={repoUrl}
-              onChange={(e) => {
-                setRepoUrl(e.target.value);
-                setConnectError("");
-              }}
+              placeholder="New sprint name..."
+              value={newSprintName}
+              onChange={(e) => setNewSprintName(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") connectRepo();
+                if (e.key === "Enter") createSprint();
               }}
             />
-            <button
-              className="sync-btn sync-btn-primary"
-              onClick={connectRepo}
-              disabled={connectingRepo}
-            >
-              {connectingRepo ? "Connecting..." : "Connect Repo"}
+            <button onClick={createSprint} disabled={creatingSprint}>
+              +
             </button>
-            {connectError && (
-              <p className="github-connect-error">{connectError}</p>
-            )}
           </div>
-        ) : (
-          <>
-            <div className="github-repo-name">{github.repository.name}</div>
-            <div className="github-stats">
-              <span title="Stars">⭐ {github.repository.stars}</span>
-              <span title="Forks">🍴 {github.repository.forks}</span>
-              <span title="Open PRs">🔀 {github.openPullRequests}</span>
-            </div>
 
-            {github.latestCommit && (
-              <div className="github-commit">
-                <small>{github.latestCommit.message}</small>
-              </div>
-            )}
-
-            {/* SYNC ACTIONS */}
-            <div className="github-sync-section">
-              <button
-                className="sync-btn sync-btn-primary"
-                onClick={syncAll}
-                disabled={syncing || syncingPRs || syncingCommits}
+          <div className="sprint-list">
+            {sprints.map((sprint) => (
+              <div
+                key={sprint.id}
+                className={`sprint-card sprint-${sprint.status.toLowerCase()}`}
               >
-                {syncing || syncingPRs || syncingCommits
-                  ? "Syncing..."
-                  : "Sync All"}
-              </button>
-              <div className="sync-btn-row">
-                <button
-                  className="sync-btn sync-btn-sm"
-                  onClick={importGitHubIssues}
-                  disabled={syncing}
-                >
-                  {syncing ? "..." : "Issues"}
-                </button>
-                <button
-                  className="sync-btn sync-btn-sm"
-                  onClick={syncPullRequests}
-                  disabled={syncingPRs}
-                >
-                  {syncingPRs ? "..." : "PRs"}
-                </button>
-                <button
-                  className="sync-btn sync-btn-sm"
-                  onClick={syncCommits}
-                  disabled={syncingCommits}
-                >
-                  {syncingCommits ? "..." : "Commits"}
-                </button>
-              </div>
-
-              {syncStatus && syncStatus.syncedIssues > 0 && (
-                <div className="sync-status">
-                  <span className="sync-count">
-                    {syncStatus.syncedIssues} issue
-                    {syncStatus.syncedIssues !== 1 ? "s" : ""} synced
+                <div className="sprint-card-header">
+                  <span className="sprint-name">{sprint.name}</span>
+                  <span
+                    className={`sprint-status-badge ${sprint.status.toLowerCase()}`}
+                  >
+                    {sprint.status}
                   </span>
-                  {syncStatus.lastSyncedAt && (
-                    <span className="sync-time">
-                      Last sync:{" "}
-                      {new Date(syncStatus.lastSyncedAt).toLocaleDateString(
-                        "en-US",
-                        {
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        },
-                      )}
+                </div>
+                <div className="sprint-card-meta">
+                  <span className="sprint-task-count">
+                    {sprint._count.tasks} task
+                    {sprint._count.tasks !== 1 ? "s" : ""}
+                  </span>
+                  {sprint.startDate && (
+                    <span className="sprint-dates">
+                      {new Date(sprint.startDate).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      })}
+                      {sprint.endDate &&
+                        ` – ${new Date(sprint.endDate).toLocaleDateString(
+                          "en-US",
+                          {
+                            month: "short",
+                            day: "numeric",
+                          },
+                        )}`}
                     </span>
                   )}
                 </div>
-              )}
-            </div>
-
-            {/* WEBHOOK STATUS */}
-            <div className="webhook-section">
-              <div className="webhook-header">
-                <span className="webhook-label">Real-time Sync</span>
-                <span
-                  className={`webhook-status ${webhookActive ? "active" : "inactive"}`}
-                >
-                  {webhookActive ? "Active" : "Off"}
-                </span>
-              </div>
-              {webhookActive ? (
-                <button
-                  className="sync-btn sync-btn-sm webhook-btn-remove"
-                  onClick={removeWebhook}
-                  disabled={settingUpWebhook}
-                >
-                  {settingUpWebhook ? "..." : "Disable Webhook"}
-                </button>
-              ) : (
-                <button
-                  className="sync-btn sync-btn-primary webhook-btn-setup"
-                  onClick={setupWebhook}
-                  disabled={settingUpWebhook}
-                >
-                  {settingUpWebhook ? "Setting up..." : "Enable Webhooks"}
-                </button>
-              )}
-              <p className="webhook-hint">
-                {webhookActive
-                  ? "GitHub events sync automatically."
-                  : "Enable to auto-sync issues, PRs, and commits in real-time."}
-              </p>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* CLIENTS PANEL */}
-      <div className="clients-panel">
-        <h5>Clients</h5>
-        <div className="clients-invite">
-          <input
-            type="email"
-            placeholder="Client email..."
-            value={clientEmail}
-            onChange={(e) => {
-              setClientEmail(e.target.value);
-              setClientError("");
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") inviteClient();
-            }}
-          />
-          <button onClick={inviteClient} disabled={invitingClient}>
-            {invitingClient ? "..." : "Invite"}
-          </button>
-        </div>
-        {clientError && <p className="clients-error">{clientError}</p>}
-        <div className="clients-list">
-          {clients.map((c) => (
-            <div key={c.id} className="clients-item">
-              <div className="clients-item-info">
-                {c.user.image ? (
-                  <Image
-                    src={c.user.image}
-                    alt=""
-                    width={24}
-                    height={24}
-                    className="clients-item-avatar"
-                  />
-                ) : (
-                  <span className="clients-item-avatar-fallback">
-                    {c.user.name?.[0]?.toUpperCase() ?? "?"}
-                  </span>
-                )}
-                <span className="clients-item-name">
-                  {c.user.name ?? c.user.email}
-                </span>
-              </div>
-              <button
-                className="clients-item-remove"
-                onClick={() => removeClient(c.id)}
-                title="Remove client"
-              >
-                &times;
-              </button>
-            </div>
-          ))}
-          {clients.length === 0 && (
-            <p className="clients-empty">No clients invited yet.</p>
-          )}
-        </div>
-      </div>
-
-      {/* SPRINTS PANEL */}
-      <div className="sprints-panel">
-        <h5>Sprints</h5>
-        <div className="sprint-create">
-          <input
-            type="text"
-            placeholder="New sprint name..."
-            value={newSprintName}
-            onChange={(e) => setNewSprintName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") createSprint();
-            }}
-          />
-          <button onClick={createSprint} disabled={creatingSprint}>
-            +
-          </button>
-        </div>
-
-        <div className="sprint-list">
-          {sprints.map((sprint) => (
-            <div
-              key={sprint.id}
-              className={`sprint-card sprint-${sprint.status.toLowerCase()}`}
-            >
-              <div className="sprint-card-header">
-                <span className="sprint-name">{sprint.name}</span>
-                <span
-                  className={`sprint-status-badge ${sprint.status.toLowerCase()}`}
-                >
-                  {sprint.status}
-                </span>
-              </div>
-              <div className="sprint-card-meta">
-                <span className="sprint-task-count">
-                  {sprint._count.tasks} task
-                  {sprint._count.tasks !== 1 ? "s" : ""}
-                </span>
-                {sprint.startDate && (
-                  <span className="sprint-dates">
-                    {new Date(sprint.startDate).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                    })}
-                    {sprint.endDate &&
-                      ` – ${new Date(sprint.endDate).toLocaleDateString(
-                        "en-US",
-                        {
-                          month: "short",
-                          day: "numeric",
-                        },
-                      )}`}
-                  </span>
-                )}
-              </div>
-              <div className="sprint-card-actions">
-                {sprint.status === "PLANNING" && (
-                  <>
+                <div className="sprint-card-actions">
+                  {sprint.status === "PLANNING" && (
+                    <>
+                      <button
+                        className="sprint-action-btn start"
+                        onClick={() =>
+                          updateSprint(sprint.id, {
+                            status: "ACTIVE",
+                            startDate: new Date().toISOString(),
+                          })
+                        }
+                      >
+                        Start Sprint
+                      </button>
+                      <button
+                        className="sprint-action-btn delete"
+                        onClick={() => deleteSprint(sprint.id)}
+                      >
+                        ✕
+                      </button>
+                    </>
+                  )}
+                  {sprint.status === "ACTIVE" && (
                     <button
-                      className="sprint-action-btn start"
+                      className="sprint-action-btn complete"
                       onClick={() =>
                         updateSprint(sprint.id, {
-                          status: "ACTIVE",
-                          startDate: new Date().toISOString(),
+                          status: "COMPLETED",
+                          endDate: new Date().toISOString(),
                         })
                       }
                     >
-                      Start Sprint
+                      Complete Sprint
                     </button>
-                    <button
-                      className="sprint-action-btn delete"
-                      onClick={() => deleteSprint(sprint.id)}
-                    >
-                      ✕
-                    </button>
-                  </>
-                )}
-                {sprint.status === "ACTIVE" && (
+                  )}
+                </div>
+              </div>
+            ))}
+            {sprints.length === 0 && (
+              <p className="sprint-empty">
+                No sprints yet. Create one to get started.
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* GITHUB PANEL */}
+        <div className="github-panel">
+          <h5>GitHub</h5>
+
+          {!github?.repository ? (
+            <div className="github-connect">
+              <p className="github-empty">No repository connected</p>
+              <input
+                type="text"
+                className="github-connect-input"
+                placeholder="owner/repo or GitHub URL"
+                value={repoUrl}
+                onChange={(e) => {
+                  setRepoUrl(e.target.value);
+                  setConnectError("");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") connectRepo();
+                }}
+              />
+              <button
+                className="sync-btn sync-btn-primary"
+                onClick={connectRepo}
+                disabled={connectingRepo}
+              >
+                {connectingRepo ? "Connecting..." : "Connect Repo"}
+              </button>
+              {connectError && (
+                <p className="github-connect-error">{connectError}</p>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="github-repo-name">{github.repository.name}</div>
+              <div className="github-stats">
+                <span title="Stars">⭐ {github.repository.stars}</span>
+                <span title="Forks">🍴 {github.repository.forks}</span>
+                <span title="Open PRs">🔀 {github.openPullRequests}</span>
+              </div>
+
+              {github.latestCommit && (
+                <div className="github-commit">
+                  <small>{github.latestCommit.message}</small>
+                </div>
+              )}
+
+              {/* SYNC ACTIONS */}
+              <div className="github-sync-section">
+                <button
+                  className="sync-btn sync-btn-primary"
+                  onClick={syncAll}
+                  disabled={syncing || syncingPRs || syncingCommits}
+                >
+                  {syncing || syncingPRs || syncingCommits
+                    ? "Syncing..."
+                    : "Sync All"}
+                </button>
+                <div className="sync-btn-row">
                   <button
-                    className="sprint-action-btn complete"
-                    onClick={() =>
-                      updateSprint(sprint.id, {
-                        status: "COMPLETED",
-                        endDate: new Date().toISOString(),
-                      })
-                    }
+                    className="sync-btn sync-btn-sm"
+                    onClick={importGitHubIssues}
+                    disabled={syncing}
                   >
-                    Complete Sprint
+                    {syncing ? "..." : "Issues"}
                   </button>
+                  <button
+                    className="sync-btn sync-btn-sm"
+                    onClick={syncPullRequests}
+                    disabled={syncingPRs}
+                  >
+                    {syncingPRs ? "..." : "PRs"}
+                  </button>
+                  <button
+                    className="sync-btn sync-btn-sm"
+                    onClick={syncCommits}
+                    disabled={syncingCommits}
+                  >
+                    {syncingCommits ? "..." : "Commits"}
+                  </button>
+                </div>
+
+                {syncStatus && syncStatus.syncedIssues > 0 && (
+                  <div className="sync-status">
+                    <span className="sync-count">
+                      {syncStatus.syncedIssues} issue
+                      {syncStatus.syncedIssues !== 1 ? "s" : ""} synced
+                    </span>
+                    {syncStatus.lastSyncedAt && (
+                      <span className="sync-time">
+                        Last sync:{" "}
+                        {new Date(syncStatus.lastSyncedAt).toLocaleDateString(
+                          "en-US",
+                          {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          },
+                        )}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
-            </div>
-          ))}
-          {sprints.length === 0 && (
-            <p className="sprint-empty">
-              No sprints yet. Create one to get started.
-            </p>
+
+              {/* WEBHOOK STATUS */}
+              <div className="webhook-section">
+                <div className="webhook-header">
+                  <span className="webhook-label">Real-time Sync</span>
+                  <span
+                    className={`webhook-status ${webhookActive ? "active" : "inactive"}`}
+                  >
+                    {webhookActive ? "Active" : "Off"}
+                  </span>
+                </div>
+                {webhookActive ? (
+                  <button
+                    className="sync-btn sync-btn-sm webhook-btn-remove"
+                    onClick={removeWebhook}
+                    disabled={settingUpWebhook}
+                  >
+                    {settingUpWebhook ? "..." : "Disable Webhook"}
+                  </button>
+                ) : (
+                  <button
+                    className="sync-btn sync-btn-primary webhook-btn-setup"
+                    onClick={setupWebhook}
+                    disabled={settingUpWebhook}
+                  >
+                    {settingUpWebhook ? "Setting up..." : "Enable Webhooks"}
+                  </button>
+                )}
+                <p className="webhook-hint">
+                  {webhookActive
+                    ? "GitHub events sync automatically."
+                    : "Enable to auto-sync issues, PRs, and commits in real-time."}
+                </p>
+              </div>
+            </>
           )}
+        </div>
+
+        {/* CLIENTS PANEL */}
+        <div className="clients-panel">
+          <h5>Clients</h5>
+          <div className="clients-invite">
+            <input
+              type="email"
+              placeholder="Client email..."
+              value={clientEmail}
+              onChange={(e) => {
+                setClientEmail(e.target.value);
+                setClientError("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") inviteClient();
+              }}
+            />
+            <button onClick={inviteClient} disabled={invitingClient}>
+              {invitingClient ? "..." : "Invite"}
+            </button>
+          </div>
+          {clientError && <p className="clients-error">{clientError}</p>}
+          <div className="clients-list">
+            {clients.map((c) => (
+              <div key={c.id} className="clients-item">
+                <div className="clients-item-info">
+                  {c.user.image ? (
+                    <Image
+                      src={c.user.image}
+                      alt=""
+                      width={24}
+                      height={24}
+                      className="clients-item-avatar"
+                    />
+                  ) : (
+                    <span className="clients-item-avatar-fallback">
+                      {c.user.name?.[0]?.toUpperCase() ?? "?"}
+                    </span>
+                  )}
+                  <span className="clients-item-name">
+                    {c.user.name ?? c.user.email}
+                  </span>
+                </div>
+                <button
+                  className="clients-item-remove"
+                  onClick={() => removeClient(c.id)}
+                  title="Remove client"
+                >
+                  &times;
+                </button>
+              </div>
+            ))}
+            {clients.length === 0 && (
+              <p className="clients-empty">No clients invited yet.</p>
+            )}
+          </div>
         </div>
       </div>
 

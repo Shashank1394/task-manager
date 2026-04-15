@@ -10,6 +10,23 @@
   }
 }
 
+.project-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+
+  @media (min-width: 992px) {
+    width: 300px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 1rem;
+    align-self: flex-start;
+    max-height: calc(100vh - 5rem);
+    overflow-y: auto;
+  }
+}
+
 /* FILTER BAR */
 
 .filter-bar {
@@ -394,7 +411,6 @@
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
-  align-self: flex-start;
 
   h5 {
     margin: 0 0 0.75rem;
@@ -403,12 +419,6 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--text-secondary);
-  }
-
-  @media (min-width: 992px) {
-    width: 280px;
-    position: sticky;
-    top: 1rem;
   }
 }
 
@@ -1363,7 +1373,6 @@
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
-  align-self: flex-start;
 
   h5 {
     margin: 0 0 0.75rem;
@@ -1372,10 +1381,6 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--text-secondary);
-  }
-
-  @media (min-width: 992px) {
-    width: 280px;
   }
 }
 
@@ -1728,16 +1733,19 @@
 /* ── Sprints Panel ── */
 
 .sprints-panel {
-  background: var(--bg-card);
+  width: 100%;
+  padding: 1rem;
+  background: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
-  padding: 1rem;
-  margin-top: 1rem;
 
   h5 {
     margin: 0 0 0.75rem;
-    font-size: 0.95rem;
-    color: var(--text-primary);
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
   }
 }
 
