@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-server";
+import {
+  forbidden,
+  handleRouteError,
+  notFound,
+  unauthorized,
+} from "@/lib/api-errors";
 
 export async function GET(
   _req: Request,
@@ -8,13 +14,32 @@ export async function GET(
 ) {
   try {
     const { taskId } = await context.params;
-    await requireAuth();
+    const session = await requireAuth();
 
-    const task = await prisma.task.findUnique({
-      where: { id: taskId },
+    const task = await prisma.task.findFirst({
+      where: {
+        id: taskId,
+        board: {
+          project: {
+            organization: {
+              members: { some: { userId: session.user.id } },
+            },
+          },
+        },
+      },
       select: {
         id: true,
         githubIssueUrl: true,
+        board: {
+          select: {
+            project: {
+              select: {
+                id: true,
+                organizationId: true,
+              },
+            },
+          },
+        },
         githubIssue: {
           select: {
             githubIssueNumber: true,
@@ -49,7 +74,29 @@ export async function GET(
     });
 
     if (!task) {
-      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+      throw notFound("Task not found");
+    }
+
+    const membership = await prisma.organizationMember.findFirst({
+      where: {
+        organizationId: task.board.project.organizationId,
+        userId: session.user.id,
+      },
+    });
+
+    if (membership?.role === "CLIENT") {
+      const clientAccess = await prisma.projectClient.findUnique({
+        where: {
+          userId_projectId: {
+            userId: session.user.id,
+            projectId: task.board.project.id,
+          },
+        },
+      });
+
+      if (!clientAccess) {
+        throw forbidden("Forbidden");
+      }
     }
 
     return NextResponse.json({
@@ -65,13 +112,9 @@ export async function GET(
       commits: task.githubCommits,
     });
   } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
     }
-    console.error("Task GitHub data error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+    return handleRouteError(error);
   }
 }

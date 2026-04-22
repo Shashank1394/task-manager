@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-server";
+import { handleRouteError, unauthorized } from "@/lib/api-errors";
+import {
+  requireGitHubAccessToken,
+  requireGitHubProjectAccess,
+} from "@/lib/github-route";
 
 export async function GET(
   _req: Request,
@@ -10,58 +14,20 @@ export async function GET(
     const { projectId } = await context.params;
     const session = await requireAuth();
 
-    // Get project
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        organization: {
-          include: { members: true },
-        },
+    const project = await requireGitHubProjectAccess(
+      projectId,
+      session.user.id,
+      {
+        requireConnectedRepo: true,
       },
-    });
-
-    if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
-    }
-
-    // Check membership (exclude clients)
-    const isMember = project.organization.members.some(
-      (m) => m.userId === session.user.id && m.role !== "CLIENT",
+    );
+    const accessToken = await requireGitHubAccessToken(
+      session.user.id,
+      "GitHub not connected",
     );
 
-    if (!isMember) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    // Check GitHub repo attached
-    if (
-      project.repoProvider !== "GITHUB" ||
-      !project.repoOwner ||
-      !project.repoName
-    ) {
-      return NextResponse.json(
-        { error: "GitHub repository not connected" },
-        { status: 400 },
-      );
-    }
-
-    // Get GitHub account + token
-    const githubAccount = await prisma.account.findFirst({
-      where: {
-        userId: session.user.id,
-        provider: "github",
-      },
-    });
-
-    if (!githubAccount?.access_token) {
-      return NextResponse.json(
-        { error: "GitHub not connected" },
-        { status: 400 },
-      );
-    }
-
     const headers = {
-      Authorization: `Bearer ${githubAccount.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       Accept: "application/vnd.github+json",
     };
 
@@ -98,6 +64,10 @@ export async function GET(
         stars: repo.stargazers_count,
         forks: repo.forks_count,
         defaultBranch: repo.default_branch,
+        visibility: repo.visibility ?? (repo.private ? "private" : "public"),
+        isArchived: Boolean(repo.archived),
+        primaryLanguage: repo.language ?? null,
+        pushedAt: repo.pushed_at ?? null,
       },
       latestCommit: latestCommit
         ? {
@@ -109,7 +79,9 @@ export async function GET(
       openPullRequests: pulls.length,
     });
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }

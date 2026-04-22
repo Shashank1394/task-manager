@@ -59,6 +59,10 @@ type GitHubStatus = {
     stars: number;
     forks: number;
     defaultBranch: string;
+    visibility: string;
+    isArchived: boolean;
+    primaryLanguage: string | null;
+    pushedAt: string | null;
   };
   latestCommit: {
     message: string;
@@ -77,6 +81,7 @@ type SyncStatus = {
 
 type ProjectClient = {
   id: string;
+  createdAt: string;
   user: {
     id: string;
     name: string | null;
@@ -84,6 +89,115 @@ type ProjectClient = {
     image: string | null;
   };
 };
+
+type SprintDraft = {
+  name: string;
+  goal: string;
+  startDate: string;
+  endDate: string;
+};
+
+function toDateInputValue(value: string | null) {
+  return value ? value.slice(0, 10) : "";
+}
+
+function formatSprintWindow(startDate: string | null, endDate: string | null) {
+  if (!startDate && !endDate) {
+    return null;
+  }
+
+  const formatDate = (value: string) =>
+    new Date(value).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+
+  if (startDate && endDate) {
+    return `${formatDate(startDate)} - ${formatDate(endDate)}`;
+  }
+
+  if (startDate) {
+    return `Starts ${formatDate(startDate)}`;
+  }
+
+  return `Ends ${formatDate(endDate!)}`;
+}
+
+function createSprintDraft(sprint: Sprint): SprintDraft {
+  return {
+    name: sprint.name,
+    goal: sprint.goal ?? "",
+    startDate: toDateInputValue(sprint.startDate),
+    endDate: toDateInputValue(sprint.endDate),
+  };
+}
+
+function formatDisplayDate(
+  value: string | null,
+  options: Intl.DateTimeFormatOptions = {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  },
+) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.toLocaleDateString("en-US", options);
+}
+
+function formatLabel(value: string) {
+  return value
+    .toLowerCase()
+    .split("_")
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+}
+
+function formatSyncAction(action: string | null) {
+  return action ? formatLabel(action) : "No sync activity yet";
+}
+
+function getSprintElapsedPercent(
+  startDate: string | null,
+  endDate: string | null,
+) {
+  if (!startDate || !endDate) {
+    return null;
+  }
+
+  const startTimestamp = new Date(startDate).getTime();
+  const endTimestamp = new Date(endDate).getTime();
+
+  if (
+    Number.isNaN(startTimestamp) ||
+    Number.isNaN(endTimestamp) ||
+    endTimestamp <= startTimestamp
+  ) {
+    return null;
+  }
+
+  const currentTimestamp = Date.now();
+
+  if (currentTimestamp <= startTimestamp) {
+    return 0;
+  }
+
+  if (currentTimestamp >= endTimestamp) {
+    return 100;
+  }
+
+  return Math.round(
+    ((currentTimestamp - startTimestamp) / (endTimestamp - startTimestamp)) *
+      100,
+  );
+}
 
 export default function ProjectPage() {
   const { projectId } = useParams();
@@ -126,6 +240,10 @@ export default function ProjectPage() {
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [newSprintName, setNewSprintName] = useState("");
   const [creatingSprint, setCreatingSprint] = useState(false);
+  const [editingSprintId, setEditingSprintId] = useState<string | null>(null);
+  const [sprintDraft, setSprintDraft] = useState<SprintDraft | null>(null);
+  const [savingSprintId, setSavingSprintId] = useState<string | null>(null);
+  const [sprintPlanError, setSprintPlanError] = useState("");
 
   // @dnd-kit sensors — require 5px movement before activating to allow clicks
   const sensors = useSensors(
@@ -513,6 +631,98 @@ export default function ProjectPage() {
     }
   };
 
+  const applyUpdatedSprintToState = (
+    updated: Sprint,
+    options?: { completeOtherActiveSprints?: boolean },
+  ) => {
+    const shouldCompleteOtherActiveSprints =
+      options?.completeOtherActiveSprints ?? false;
+
+    setSprints((prev) =>
+      prev.map((s) => {
+        if (s.id === updated.id) return updated;
+
+        if (shouldCompleteOtherActiveSprints && s.status === "ACTIVE") {
+          return { ...s, status: "COMPLETED" as const };
+        }
+
+        return s;
+      }),
+    );
+
+    setTasks((prev) =>
+      prev.map((task) => {
+        if (!task.sprint) return task;
+
+        if (task.sprint.id === updated.id) {
+          return {
+            ...task,
+            sprint: {
+              id: updated.id,
+              name: updated.name,
+              status: updated.status,
+            },
+          };
+        }
+
+        if (
+          shouldCompleteOtherActiveSprints &&
+          task.sprint.status === "ACTIVE"
+        ) {
+          return {
+            ...task,
+            sprint: { ...task.sprint, status: "COMPLETED" as const },
+          };
+        }
+
+        return task;
+      }),
+    );
+  };
+
+  const patchSprint = async (
+    sprintId: string,
+    updates: Partial<
+      Pick<Sprint, "name" | "status" | "startDate" | "endDate" | "goal">
+    >,
+  ) => {
+    try {
+      const res = await fetch(`/api/projects/${projectIdParam}/sprints`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sprintId, ...updates }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        return {
+          ok: false as const,
+          message: data?.error || "Failed to update sprint",
+        };
+      }
+
+      const updated: Sprint = await res.json();
+      applyUpdatedSprintToState(updated, {
+        completeOtherActiveSprints: updates.status === "ACTIVE",
+      });
+      return { ok: true as const, sprint: updated };
+    } catch {
+      return { ok: false as const, message: "Failed to update sprint" };
+    }
+  };
+
+  const startEditingSprint = (sprint: Sprint) => {
+    setEditingSprintId(sprint.id);
+    setSprintDraft(createSprintDraft(sprint));
+    setSprintPlanError("");
+  };
+
+  const cancelEditingSprint = () => {
+    setEditingSprintId(null);
+    setSprintDraft(null);
+    setSprintPlanError("");
+  };
+
   const inviteClient = async () => {
     if (invitingClient || !clientEmail.trim()) return;
     setClientError("");
@@ -567,6 +777,7 @@ export default function ProjectPage() {
         const sprint: Sprint = await res.json();
         setSprints((prev) => [sprint, ...prev]);
         setNewSprintName("");
+        startEditingSprint(sprint);
       }
     } catch {
       console.error("Failed to create sprint");
@@ -581,32 +792,48 @@ export default function ProjectPage() {
       Pick<Sprint, "name" | "status" | "startDate" | "endDate" | "goal">
     >,
   ) => {
-    try {
-      const res = await fetch(`/api/projects/${projectIdParam}/sprints`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sprintId, ...updates }),
-      });
-      if (res.ok) {
-        const updated: Sprint = await res.json();
-        setSprints((prev) =>
-          prev.map((s) => {
-            if (s.id === updated.id) return updated;
-            // If a sprint was activated, others become completed
-            if (
-              updates.status === "ACTIVE" &&
-              s.status === "ACTIVE" &&
-              s.id !== updated.id
-            ) {
-              return { ...s, status: "COMPLETED" as const };
-            }
-            return s;
-          }),
-        );
-      }
-    } catch {
-      console.error("Failed to update sprint");
+    const result = await patchSprint(sprintId, updates);
+    if (!result.ok) {
+      console.error(result.message);
     }
+  };
+
+  const saveSprintPlan = async (sprintId: string) => {
+    if (!sprintDraft) return;
+
+    const name = sprintDraft.name.trim();
+    if (!name) {
+      setSprintPlanError("Sprint name is required");
+      return;
+    }
+
+    if (
+      sprintDraft.startDate &&
+      sprintDraft.endDate &&
+      sprintDraft.endDate < sprintDraft.startDate
+    ) {
+      setSprintPlanError("End date must be on or after start date");
+      return;
+    }
+
+    setSavingSprintId(sprintId);
+    setSprintPlanError("");
+
+    const result = await patchSprint(sprintId, {
+      name,
+      goal: sprintDraft.goal.trim() || null,
+      startDate: sprintDraft.startDate || null,
+      endDate: sprintDraft.endDate || null,
+    });
+
+    setSavingSprintId(null);
+
+    if (!result.ok) {
+      setSprintPlanError(result.message);
+      return;
+    }
+
+    cancelEditingSprint();
   };
 
   const deleteSprint = async (sprintId: string) => {
@@ -720,6 +947,71 @@ export default function ProjectPage() {
     filterPriority !== "ALL" ||
     filterAssignee !== "ALL" ||
     filterSprint !== "ALL";
+  const activeSprint =
+    sprints.find((sprint) => sprint.status === "ACTIVE") ?? null;
+  const activeSprintTasks = activeSprint
+    ? tasks.filter((task) => task.sprint?.id === activeSprint.id)
+    : [];
+  const activeSprintCompletedTasks = activeSprintTasks.filter(
+    (task) => task.status === "DONE",
+  ).length;
+  const activeSprintInProgressTasks = activeSprintTasks.filter(
+    (task) => task.status === "IN_PROGRESS",
+  ).length;
+  const activeSprintTodoTasks = activeSprintTasks.filter(
+    (task) => task.status === "TODO",
+  ).length;
+  const activeSprintOverdueTasks = activeSprintTasks.filter((task) => {
+    if (task.status === "DONE" || !task.dueDate) {
+      return false;
+    }
+
+    return new Date(task.dueDate).getTime() < Date.now();
+  }).length;
+  const activeSprintProgress =
+    activeSprintTasks.length > 0
+      ? Math.round(
+          (activeSprintCompletedTasks / activeSprintTasks.length) * 100,
+        )
+      : 0;
+  const activeSprintWindow = activeSprint
+    ? formatSprintWindow(activeSprint.startDate, activeSprint.endDate)
+    : null;
+  const activeSprintElapsed = activeSprint
+    ? getSprintElapsedPercent(activeSprint.startDate, activeSprint.endDate)
+    : null;
+  const activeSprintPaceLabel =
+    activeSprintElapsed == null
+      ? "Schedule tracking locked"
+      : activeSprintProgress >= activeSprintElapsed + 10
+        ? "Ahead of pace"
+        : activeSprintProgress >= activeSprintElapsed - 10
+          ? "On pace"
+          : "Behind pace";
+  const activeSprintPaceContext =
+    activeSprintElapsed == null
+      ? "Add sprint dates to compare elapsed time against delivered scope."
+      : `${activeSprintElapsed}% of sprint time has elapsed.`;
+  const activeSprintScopeSegments = [
+    {
+      label: "Done",
+      value: activeSprintCompletedTasks,
+      tone: "done",
+    },
+    {
+      label: "In Progress",
+      value: activeSprintInProgressTasks,
+      tone: "progress",
+    },
+    {
+      label: "Ready",
+      value: activeSprintTodoTasks,
+      tone: "ready",
+    },
+  ].filter((segment) => segment.value > 0);
+  const latestClientInvite = clients[0]
+    ? formatDisplayDate(clients[0].createdAt)
+    : null;
 
   const handleDragStart = (event: DragStartEvent) => {
     const task = tasks.find((t) => t.id === event.active.id);
@@ -974,6 +1266,116 @@ export default function ProjectPage() {
         {/* SPRINTS PANEL */}
         <div className="sprints-panel">
           <h5>Sprints</h5>
+          {activeSprint && (
+            <div className="active-sprint-overview">
+              <div className="active-sprint-header">
+                <span className="active-sprint-kicker">Active sprint</span>
+                <span className="active-sprint-title">{activeSprint.name}</span>
+              </div>
+              <p className="active-sprint-goal">
+                {activeSprint.goal?.trim() ||
+                  "Set a sprint goal to align the team around the next milestone."}
+              </p>
+              <div className="active-sprint-meta">
+                <span>
+                  {activeSprintCompletedTasks}/{activeSprintTasks.length} tasks
+                  done
+                </span>
+                {activeSprintWindow && <span>{activeSprintWindow}</span>}
+              </div>
+              <div className="active-sprint-progress">
+                <div
+                  className="active-sprint-progress-bar"
+                  aria-label={`Active sprint progress ${activeSprintProgress}%`}
+                >
+                  <span
+                    className="active-sprint-progress-fill"
+                    style={{ width: `${activeSprintProgress}%` }}
+                  />
+                </div>
+                <span className="active-sprint-progress-label">
+                  {activeSprintProgress}% complete
+                </span>
+              </div>
+              <div className="active-sprint-metric-grid">
+                <div className="active-sprint-metric-card">
+                  <span className="active-sprint-metric-label">Done</span>
+                  <strong className="active-sprint-metric-value">
+                    {activeSprintCompletedTasks}
+                  </strong>
+                </div>
+                <div className="active-sprint-metric-card">
+                  <span className="active-sprint-metric-label">
+                    In Progress
+                  </span>
+                  <strong className="active-sprint-metric-value">
+                    {activeSprintInProgressTasks}
+                  </strong>
+                </div>
+                <div className="active-sprint-metric-card">
+                  <span className="active-sprint-metric-label">Ready</span>
+                  <strong className="active-sprint-metric-value">
+                    {activeSprintTodoTasks}
+                  </strong>
+                </div>
+                <div className="active-sprint-metric-card warning">
+                  <span className="active-sprint-metric-label">Overdue</span>
+                  <strong className="active-sprint-metric-value">
+                    {activeSprintOverdueTasks}
+                  </strong>
+                </div>
+              </div>
+              {activeSprintTasks.length > 0 ? (
+                <div className="active-sprint-burnup">
+                  <div className="active-sprint-burnup-header">
+                    <span>Scope burnup</span>
+                    <span>{activeSprintTasks.length} scoped tasks</span>
+                  </div>
+                  <div className="active-sprint-burnup-bar">
+                    {activeSprintScopeSegments.map((segment) => (
+                      <span
+                        key={segment.label}
+                        className={`active-sprint-burnup-segment ${segment.tone}`}
+                        style={{
+                          width: `${(segment.value / activeSprintTasks.length) * 100}%`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <div className="active-sprint-burnup-legend">
+                    {activeSprintScopeSegments.map((segment) => (
+                      <span key={segment.label}>
+                        <i className={`burnup-dot ${segment.tone}`} />
+                        {segment.label} {segment.value}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="active-sprint-empty">
+                  No tasks are scoped to this sprint yet.
+                </p>
+              )}
+              <div
+                className={`active-sprint-pace ${
+                  activeSprintElapsed == null
+                    ? "pending"
+                    : activeSprintProgress >= activeSprintElapsed + 10
+                      ? "ahead"
+                      : activeSprintProgress >= activeSprintElapsed - 10
+                        ? "steady"
+                        : "behind"
+                }`}
+              >
+                <span className="active-sprint-pace-label">
+                  {activeSprintPaceLabel}
+                </span>
+                <span className="active-sprint-pace-meta">
+                  {activeSprintPaceContext}
+                </span>
+              </div>
+            </div>
+          )}
           <div className="sprint-create">
             <input
               type="text"
@@ -1008,24 +1410,107 @@ export default function ProjectPage() {
                     {sprint._count.tasks} task
                     {sprint._count.tasks !== 1 ? "s" : ""}
                   </span>
-                  {sprint.startDate && (
+                  {formatSprintWindow(sprint.startDate, sprint.endDate) && (
                     <span className="sprint-dates">
-                      {new Date(sprint.startDate).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                      })}
-                      {sprint.endDate &&
-                        ` – ${new Date(sprint.endDate).toLocaleDateString(
-                          "en-US",
-                          {
-                            month: "short",
-                            day: "numeric",
-                          },
-                        )}`}
+                      {formatSprintWindow(sprint.startDate, sprint.endDate)}
                     </span>
                   )}
                 </div>
+                {editingSprintId === sprint.id && sprintDraft ? (
+                  <div className="sprint-plan-form">
+                    <label className="sprint-plan-field">
+                      <span>Sprint name</span>
+                      <input
+                        type="text"
+                        value={sprintDraft.name}
+                        onChange={(e) =>
+                          setSprintDraft((prev) =>
+                            prev ? { ...prev, name: e.target.value } : prev,
+                          )
+                        }
+                      />
+                    </label>
+                    <label className="sprint-plan-field">
+                      <span>Sprint goal</span>
+                      <textarea
+                        value={sprintDraft.goal}
+                        onChange={(e) =>
+                          setSprintDraft((prev) =>
+                            prev ? { ...prev, goal: e.target.value } : prev,
+                          )
+                        }
+                        rows={3}
+                        placeholder="Describe the milestone this sprint should deliver"
+                      />
+                    </label>
+                    <div className="sprint-plan-grid">
+                      <label className="sprint-plan-field">
+                        <span>Start date</span>
+                        <input
+                          type="date"
+                          value={sprintDraft.startDate}
+                          onChange={(e) =>
+                            setSprintDraft((prev) =>
+                              prev
+                                ? { ...prev, startDate: e.target.value }
+                                : prev,
+                            )
+                          }
+                        />
+                      </label>
+                      <label className="sprint-plan-field">
+                        <span>End date</span>
+                        <input
+                          type="date"
+                          value={sprintDraft.endDate}
+                          onChange={(e) =>
+                            setSprintDraft((prev) =>
+                              prev
+                                ? { ...prev, endDate: e.target.value }
+                                : prev,
+                            )
+                          }
+                        />
+                      </label>
+                    </div>
+                    {sprintPlanError && (
+                      <p className="sprint-plan-error">{sprintPlanError}</p>
+                    )}
+                    <div className="sprint-plan-actions">
+                      <button
+                        className="sprint-action-btn save"
+                        onClick={() => saveSprintPlan(sprint.id)}
+                        disabled={savingSprintId === sprint.id}
+                      >
+                        {savingSprintId === sprint.id
+                          ? "Saving..."
+                          : "Save Plan"}
+                      </button>
+                      <button
+                        className="sprint-action-btn secondary"
+                        onClick={cancelEditingSprint}
+                        disabled={savingSprintId === sprint.id}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="sprint-card-details">
+                    <p className="sprint-card-goal">
+                      {sprint.goal?.trim() || "No sprint goal defined yet."}
+                    </p>
+                  </div>
+                )}
                 <div className="sprint-card-actions">
+                  <button
+                    className="sprint-action-btn secondary"
+                    onClick={() => startEditingSprint(sprint)}
+                  >
+                    {sprint.goal || sprint.startDate || sprint.endDate
+                      ? "Edit Plan"
+                      : "Plan Sprint"}
+                  </button>
                   {sprint.status === "PLANNING" && (
                     <>
                       <button
@@ -1104,11 +1589,51 @@ export default function ProjectPage() {
             </div>
           ) : (
             <>
-              <div className="github-repo-name">{github.repository.name}</div>
+              <div className="github-repo-header">
+                <div className="github-repo-copy">
+                  <div className="github-repo-name">
+                    {github.repository.name}
+                  </div>
+                  <div className="github-repo-branch">
+                    Default branch: {github.repository.defaultBranch}
+                  </div>
+                </div>
+                <span
+                  className={`github-health-badge ${
+                    github.repository.isArchived ? "archived" : "healthy"
+                  }`}
+                >
+                  {github.repository.isArchived ? "Archived" : "Healthy"}
+                </span>
+              </div>
               <div className="github-stats">
                 <span title="Stars">⭐ {github.repository.stars}</span>
                 <span title="Forks">🍴 {github.repository.forks}</span>
                 <span title="Open PRs">🔀 {github.openPullRequests}</span>
+              </div>
+              <div className="github-health-grid">
+                <div className="github-health-card">
+                  <span className="github-health-label">Visibility</span>
+                  <strong>{formatLabel(github.repository.visibility)}</strong>
+                </div>
+                <div className="github-health-card">
+                  <span className="github-health-label">Primary language</span>
+                  <strong>
+                    {github.repository.primaryLanguage ?? "Unknown"}
+                  </strong>
+                </div>
+                <div className="github-health-card">
+                  <span className="github-health-label">Last push</span>
+                  <strong>
+                    {formatDisplayDate(github.repository.pushedAt) ?? "Unknown"}
+                  </strong>
+                </div>
+                <div className="github-health-card">
+                  <span className="github-health-label">Repo status</span>
+                  <strong>
+                    {github.repository.isArchived ? "Archived" : "Active"}
+                  </strong>
+                </div>
               </div>
 
               {github.latestCommit && (
@@ -1152,25 +1677,48 @@ export default function ProjectPage() {
                   </button>
                 </div>
 
-                {syncStatus && syncStatus.syncedIssues > 0 && (
-                  <div className="sync-status">
-                    <span className="sync-count">
-                      {syncStatus.syncedIssues} issue
-                      {syncStatus.syncedIssues !== 1 ? "s" : ""} synced
-                    </span>
+                {syncStatus && (
+                  <div className="github-sync-summary">
+                    <div className="github-sync-summary-header">
+                      <div>
+                        <span className="github-sync-summary-label">
+                          Latest sync
+                        </span>
+                        <strong>
+                          {formatSyncAction(syncStatus.lastAction)}
+                        </strong>
+                      </div>
+                      <span className="sync-count">
+                        {syncStatus.syncedIssues} issue
+                        {syncStatus.syncedIssues !== 1 ? "s" : ""} synced
+                      </span>
+                    </div>
                     {syncStatus.lastSyncedAt && (
                       <span className="sync-time">
-                        Last sync:{" "}
-                        {new Date(syncStatus.lastSyncedAt).toLocaleDateString(
-                          "en-US",
-                          {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          },
-                        )}
+                        Ran{" "}
+                        {formatDisplayDate(syncStatus.lastSyncedAt, {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
                       </span>
+                    )}
+                    {syncStatus.lastDetails && (
+                      <div className="github-sync-summary-grid">
+                        <div className="github-sync-summary-card">
+                          <span>Imported</span>
+                          <strong>{syncStatus.lastDetails.imported}</strong>
+                        </div>
+                        <div className="github-sync-summary-card">
+                          <span>Updated</span>
+                          <strong>{syncStatus.lastDetails.updated}</strong>
+                        </div>
+                        <div className="github-sync-summary-card">
+                          <span>Total</span>
+                          <strong>{syncStatus.lastDetails.total}</strong>
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}
@@ -1234,36 +1782,68 @@ export default function ProjectPage() {
             </button>
           </div>
           {clientError && <p className="clients-error">{clientError}</p>}
+          {clients.length > 0 && (
+            <div className="clients-summary">
+              <span>
+                {clients.length} active client stakeholder
+                {clients.length !== 1 ? "s" : ""}
+              </span>
+              {latestClientInvite && (
+                <span>Latest invite {latestClientInvite}</span>
+              )}
+            </div>
+          )}
           <div className="clients-list">
-            {clients.map((c) => (
-              <div key={c.id} className="clients-item">
-                <div className="clients-item-info">
-                  {c.user.image ? (
-                    <Image
-                      src={c.user.image}
-                      alt=""
-                      width={24}
-                      height={24}
-                      className="clients-item-avatar"
-                    />
-                  ) : (
-                    <span className="clients-item-avatar-fallback">
-                      {c.user.name?.[0]?.toUpperCase() ?? "?"}
-                    </span>
-                  )}
-                  <span className="clients-item-name">
-                    {c.user.name ?? c.user.email}
-                  </span>
+            {clients.map((client) => {
+              const invitedOn = formatDisplayDate(client.createdAt);
+
+              return (
+                <div key={client.id} className="clients-item">
+                  <div className="clients-item-info">
+                    {client.user.image ? (
+                      <Image
+                        src={client.user.image}
+                        alt=""
+                        width={24}
+                        height={24}
+                        className="clients-item-avatar"
+                      />
+                    ) : (
+                      <span className="clients-item-avatar-fallback">
+                        {client.user.name?.[0]?.toUpperCase() ?? "?"}
+                      </span>
+                    )}
+                    <div className="clients-item-copy">
+                      <span className="clients-item-name">
+                        {client.user.name ?? client.user.email}
+                      </span>
+                      {client.user.name && client.user.email && (
+                        <span className="clients-item-email">
+                          {client.user.email}
+                        </span>
+                      )}
+                      <div className="clients-item-meta">
+                        <span className="clients-access-badge">
+                          Active access
+                        </span>
+                        {invitedOn && (
+                          <span className="clients-invite-date">
+                            Invited {invitedOn}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    className="clients-item-remove"
+                    onClick={() => removeClient(client.id)}
+                    title="Remove client"
+                  >
+                    &times;
+                  </button>
                 </div>
-                <button
-                  className="clients-item-remove"
-                  onClick={() => removeClient(c.id)}
-                  title="Remove client"
-                >
-                  &times;
-                </button>
-              </div>
-            ))}
+              );
+            })}
             {clients.length === 0 && (
               <p className="clients-empty">No clients invited yet.</p>
             )}
@@ -1311,6 +1891,7 @@ function SortableTaskCard({
     attributes,
     listeners,
     setNodeRef,
+    setActivatorNodeRef,
     transform,
     transition,
     isDragging,
@@ -1328,13 +1909,23 @@ function SortableTaskCard({
     <div
       ref={setNodeRef}
       style={style}
-      {...attributes}
-      {...listeners}
       className={`task-card ${isDragging ? "dragging" : ""}`}
       onClick={() => setSelectedTaskId(task.id)}
     >
       <div className="task-card-top">
         <div className="task-card-content">
+          <button
+            ref={setActivatorNodeRef}
+            type="button"
+            className="task-drag-handle"
+            aria-label={`Drag ${task.title}`}
+            title={`Drag ${task.title}`}
+            onClick={(e) => e.stopPropagation()}
+            {...attributes}
+            {...listeners}
+          >
+            <span aria-hidden="true">⋮⋮</span>
+          </button>
           <span
             className={`priority-dot priority-${task.priority.toLowerCase()}`}
             title={task.priority}
@@ -1386,6 +1977,7 @@ function SortableTaskCard({
         <select
           className="task-sprint-select"
           value={task.sprint?.id ?? ""}
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
           onChange={(e) => {
             e.stopPropagation();

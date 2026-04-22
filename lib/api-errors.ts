@@ -38,6 +38,13 @@ export function conflict(message = "Conflict", details?: unknown) {
   return new ApiError(409, message, "CONFLICT", details);
 }
 
+export function isUnauthorizedError(error: unknown) {
+  return (
+    error instanceof Error &&
+    (error.message === "UNAUTHORIZED" || error.message === "Unauthorized")
+  );
+}
+
 export function handleRouteError(error: unknown) {
   if (error instanceof ApiError) {
     return NextResponse.json(
@@ -54,6 +61,13 @@ export function handleRouteError(error: unknown) {
     return NextResponse.json(
       { error: "Invalid JSON body", code: "BAD_JSON" },
       { status: 400 },
+    );
+  }
+
+  if (isUnauthorizedError(error)) {
+    return NextResponse.json(
+      { error: "Unauthorized", code: "UNAUTHORIZED" },
+      { status: 401 },
     );
   }
 

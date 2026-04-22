@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-server";
+import {
+  forbidden,
+  handleRouteError,
+  notFound,
+  unauthorized,
+} from "@/lib/api-errors";
 
 /**
  * GET /api/client/[orgId]/dashboard
@@ -24,7 +30,7 @@ export async function GET(
     });
 
     if (!membership) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw forbidden("Forbidden");
     }
 
     const org = await prisma.organization.findUnique({
@@ -33,7 +39,7 @@ export async function GET(
     });
 
     if (!org) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      throw notFound("Not found");
     }
 
     // If user is a CLIENT, only show projects they're explicitly assigned to
@@ -108,7 +114,10 @@ export async function GET(
       },
       projects: projectSummaries,
     });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }

@@ -99,14 +99,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
 
-    // Get valid task IDs for this project
-    const boardTasks = project.board
-      ? await prisma.task.findMany({
-          where: { boardId: project.board.id },
-          select: { id: true },
-        })
-      : [];
-    const validTaskIds = new Set(boardTasks.map((t) => t.id));
+    const getValidTaskIds = async () => {
+      if (!project.board) {
+        return new Set<string>();
+      }
+
+      const boardTasks = await prisma.task.findMany({
+        where: { boardId: project.board.id },
+        select: { id: true },
+      });
+
+      return new Set(boardTasks.map((task) => task.id));
+    };
 
     // Process events
     let action = "WEBHOOK_RECEIVED";
@@ -128,6 +132,7 @@ export async function POST(req: Request) {
         break;
       }
       case "pull_request": {
+        const validTaskIds = await getValidTaskIds();
         await handlePullRequestEvent(
           payload as PullRequestEventPayload,
           project.id,
@@ -138,6 +143,7 @@ export async function POST(req: Request) {
         break;
       }
       case "push": {
+        const validTaskIds = await getValidTaskIds();
         await handlePushEvent(
           payload as PushEventPayload,
           project.id,

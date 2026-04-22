@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, checkClientProjectAccess } from "@/lib/auth-server";
+import { handleRouteError, unauthorized } from "@/lib/api-errors";
 
 export async function GET(
   _req: Request,
@@ -58,7 +59,9 @@ export async function GET(
 
     return NextResponse.json(tasks);
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }
