@@ -1,6 +1,42 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-server";
+import {
+  badRequest,
+  conflict,
+  forbidden,
+  handleRouteError,
+  notFound,
+  unauthorized,
+} from "@/lib/api-errors";
+import { z } from "zod";
+
+const inviteClientSchema = z.object({
+  email: z.string().trim().email(),
+});
+
+const removeClientSchema = z.object({
+  clientId: z.string().trim().min(1),
+});
+
+async function getProjectMembership(projectId: string, userId: string) {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    include: {
+      organization: { include: { members: true } },
+    },
+  });
+
+  if (!project) {
+    throw notFound("Project not found");
+  }
+
+  const membership = project.organization.members.find(
+    (m) => m.userId === userId,
+  );
+
+  return { project, membership };
+}
 
 /**
  * GET /api/projects/[projectId]/clients
@@ -15,23 +51,13 @@ export async function GET(
     const { projectId } = await context.params;
     const session = await requireAuth();
 
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        organization: { include: { members: true } },
-      },
-    });
-
-    if (!project) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-
-    const membership = project.organization.members.find(
-      (m) => m.userId === session.user.id,
+    const { membership } = await getProjectMembership(
+      projectId,
+      session.user.id,
     );
 
     if (!membership || membership.role === "CLIENT") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw forbidden("Forbidden");
     }
 
     const clients = await prisma.projectClient.findMany({
@@ -45,8 +71,11 @@ export async function GET(
     });
 
     return NextResponse.json(clients);
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }
 
@@ -64,43 +93,25 @@ export async function POST(
     const { projectId } = await context.params;
     const session = await requireAuth();
 
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        organization: { include: { members: true } },
-      },
-    });
-
-    if (!project) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-
-    const membership = project.organization.members.find(
-      (m) => m.userId === session.user.id,
+    const { project, membership } = await getProjectMembership(
+      projectId,
+      session.user.id,
     );
 
     if (!membership || membership.role !== "ADMIN") {
-      return NextResponse.json(
-        { error: "Only admins can invite clients" },
-        { status: 403 },
-      );
+      throw forbidden("Only admins can invite clients");
     }
 
-    const { email } = (await req.json()) as { email?: string };
-
-    if (!email || !email.includes("@")) {
-      return NextResponse.json(
-        { error: "Valid email is required" },
-        { status: 400 },
-      );
+    const parsed = inviteClientSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      throw badRequest("Invalid client invite payload", parsed.error.flatten());
     }
+
+    const { email } = parsed.data;
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-      return NextResponse.json(
-        { error: "No user found with that email. They must sign up first." },
-        { status: 404 },
-      );
+      throw notFound("No user found with that email. They must sign up first.");
     }
 
     // Check if already a project client
@@ -110,10 +121,7 @@ export async function POST(
       },
     });
     if (existing) {
-      return NextResponse.json(
-        { error: "User is already a client of this project" },
-        { status: 409 },
-      );
+      throw conflict("User is already a client of this project");
     }
 
     // Ensure user is an org member (add as CLIENT if not)
@@ -151,14 +159,10 @@ export async function POST(
 
     return NextResponse.json(projectClient, { status: 201 });
   } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
     }
-    console.error("Add project client error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+    return handleRouteError(error);
   }
 }
 
@@ -175,43 +179,36 @@ export async function DELETE(
     const { projectId } = await context.params;
     const session = await requireAuth();
 
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        organization: { include: { members: true } },
-      },
-    });
-
-    if (!project) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-
-    const membership = project.organization.members.find(
-      (m) => m.userId === session.user.id,
+    const { membership } = await getProjectMembership(
+      projectId,
+      session.user.id,
     );
 
     if (!membership || membership.role !== "ADMIN") {
-      return NextResponse.json(
-        { error: "Only admins can remove clients" },
-        { status: 403 },
+      throw forbidden("Only admins can remove clients");
+    }
+
+    const parsed = removeClientSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      throw badRequest(
+        "Invalid client removal payload",
+        parsed.error.flatten(),
       );
     }
 
-    const { clientId } = (await req.json()) as { clientId?: string };
-
-    if (!clientId) {
-      return NextResponse.json(
-        { error: "clientId is required" },
-        { status: 400 },
-      );
-    }
-
-    await prisma.projectClient.delete({
-      where: { id: clientId },
+    const deleted = await prisma.projectClient.deleteMany({
+      where: { id: parsed.data.clientId, projectId },
     });
 
+    if (deleted.count === 0) {
+      throw notFound("Project client not found");
+    }
+
     return NextResponse.json({ deleted: true });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }

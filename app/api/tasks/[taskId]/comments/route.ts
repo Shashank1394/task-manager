@@ -2,6 +2,18 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-server";
 import { logActivity } from "@/lib/activity";
+import {
+  badRequest,
+  forbidden,
+  handleRouteError,
+  notFound,
+  unauthorized,
+} from "@/lib/api-errors";
+import { z } from "zod";
+
+const createCommentSchema = z.object({
+  content: z.string().trim().min(1).max(5000),
+});
 
 export async function GET(
   _req: Request,
@@ -26,7 +38,7 @@ export async function GET(
     });
 
     if (!task) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      throw notFound("Task not found");
     }
 
     const comments = await prisma.comment.findMany({
@@ -38,8 +50,11 @@ export async function GET(
     });
 
     return NextResponse.json(comments);
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }
 
@@ -51,13 +66,9 @@ export async function POST(
     const { taskId } = await context.params;
     const session = await requireAuth();
 
-    const { content } = await req.json();
-
-    if (!content || content.trim().length === 0) {
-      return NextResponse.json(
-        { error: "Comment cannot be empty" },
-        { status: 400 },
-      );
+    const parsed = createCommentSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      throw badRequest("Invalid comment payload", parsed.error.flatten());
     }
 
     // Verify access (block clients from posting comments)
@@ -77,15 +88,19 @@ export async function POST(
           },
         },
       },
+      select: {
+        title: true,
+        board: { select: { projectId: true } },
+      },
     });
 
     if (!task) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw forbidden("Forbidden");
     }
 
     const comment = await prisma.comment.create({
       data: {
-        content: content.trim(),
+        content: parsed.data.content,
         taskId,
         userId: session.user.id,
       },
@@ -94,23 +109,19 @@ export async function POST(
       },
     });
 
-    // Log activity — need projectId from task's board
-    const taskWithBoard = await prisma.task.findUnique({
-      where: { id: taskId },
-      select: { title: true, board: { select: { projectId: true } } },
+    logActivity({
+      type: "COMMENT_ADDED",
+      message: `commented on "${task.title}"`,
+      userId: session.user.id,
+      projectId: task.board.projectId,
+      taskId,
     });
-    if (taskWithBoard) {
-      logActivity({
-        type: "COMMENT_ADDED",
-        message: `commented on "${taskWithBoard.title}"`,
-        userId: session.user.id,
-        projectId: taskWithBoard.board.projectId,
-        taskId,
-      });
-    }
 
     return NextResponse.json(comment, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }

@@ -16,6 +16,10 @@ function verifySignature(
     "sha256=" +
     crypto.createHmac("sha256", secret).update(payload, "utf8").digest("hex");
 
+  if (signature.length !== expected.length) {
+    return false;
+  }
+
   return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
 }
 

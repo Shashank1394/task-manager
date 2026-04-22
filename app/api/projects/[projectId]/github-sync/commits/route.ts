@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-server";
+import { handleRouteError, unauthorized } from "@/lib/api-errors";
+import {
+  requireGitHubAccessToken,
+  requireGitHubProjectAccess,
+} from "@/lib/github-route";
 
 type GitHubCommitResponse = {
   sha: string;
@@ -32,49 +37,17 @@ export async function POST(
     const { projectId } = await context.params;
     const session = await requireAuth();
 
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        organization: { include: { members: true } },
-        board: true,
+    const project = await requireGitHubProjectAccess(
+      projectId,
+      session.user.id,
+      {
+        requireConnectedRepo: true,
       },
-    });
-
-    if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
-    }
-
-    const isMember = project.organization.members.some(
-      (m) => m.userId === session.user.id && m.role !== "CLIENT",
     );
-    if (!isMember) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    if (
-      !project.repoOwner ||
-      !project.repoName ||
-      project.repoProvider !== "GITHUB"
-    ) {
-      return NextResponse.json(
-        { error: "GitHub repository not connected" },
-        { status: 400 },
-      );
-    }
-
-    const githubAccount = await prisma.account.findFirst({
-      where: { userId: session.user.id, provider: "github" },
-    });
-
-    if (!githubAccount?.access_token) {
-      return NextResponse.json(
-        { error: "GitHub account not connected. Please sign in with GitHub." },
-        { status: 400 },
-      );
-    }
+    const accessToken = await requireGitHubAccessToken(session.user.id);
 
     const headers = {
-      Authorization: `Bearer ${githubAccount.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       Accept: "application/vnd.github+json",
     };
 
@@ -154,12 +127,9 @@ export async function POST(
 
     return NextResponse.json({ linked, updated, total: ghCommits.length });
   } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
     }
-    console.error("GitHub commit sync error:", error);
-    const message =
-      error instanceof Error ? error.message : "Internal server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return handleRouteError(error);
   }
 }

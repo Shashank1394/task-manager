@@ -2,6 +2,16 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-server";
 import crypto from "crypto";
+import { badRequest, handleRouteError, unauthorized } from "@/lib/api-errors";
+import {
+  requireGitHubAccessToken,
+  requireGitHubProjectAccess,
+} from "@/lib/github-route";
+import { z } from "zod";
+
+const setupWebhookSchema = z.object({
+  webhookUrl: z.string().trim().url().optional(),
+});
 
 /**
  * POST /api/projects/[projectId]/github-sync/setup-webhook
@@ -18,38 +28,15 @@ export async function POST(
     const { projectId } = await context.params;
     const session = await requireAuth();
 
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        organization: { include: { members: true } },
+    const project = await requireGitHubProjectAccess(
+      projectId,
+      session.user.id,
+      {
+        adminOnly: true,
+        requireConnectedRepo: true,
+        adminMessage: "Only admins can manage webhooks",
       },
-    });
-
-    if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
-    }
-
-    // Only admins can set up webhooks
-    const member = project.organization.members.find(
-      (m) => m.userId === session.user.id,
     );
-    if (!member || member.role !== "ADMIN") {
-      return NextResponse.json(
-        { error: "Only admins can manage webhooks" },
-        { status: 403 },
-      );
-    }
-
-    if (
-      !project.repoOwner ||
-      !project.repoName ||
-      project.repoProvider !== "GITHUB"
-    ) {
-      return NextResponse.json(
-        { error: "GitHub repository not connected" },
-        { status: 400 },
-      );
-    }
 
     // Check if webhook already exists
     if (project.webhookSecret && project.webhookId) {
@@ -59,26 +46,22 @@ export async function POST(
       );
     }
 
-    const githubAccount = await prisma.account.findFirst({
-      where: { userId: session.user.id, provider: "github" },
-    });
+    const accessToken = await requireGitHubAccessToken(session.user.id);
 
-    if (!githubAccount?.access_token) {
-      return NextResponse.json(
-        { error: "GitHub account not connected. Please sign in with GitHub." },
-        { status: 400 },
-      );
+    const rawBody = await req.text();
+    const parsed = setupWebhookSchema.safeParse(
+      rawBody ? JSON.parse(rawBody) : {},
+    );
+    if (!parsed.success) {
+      throw badRequest("Invalid webhook setup payload", parsed.error.flatten());
     }
 
     // Generate a cryptographically secure webhook secret
     const webhookSecret = crypto.randomBytes(32).toString("hex");
 
     // Determine the webhook URL
-    const { webhookUrl } = (await req.json().catch(() => ({}))) as {
-      webhookUrl?: string;
-    };
-
-    const callbackUrl = webhookUrl || `${getBaseUrl(req)}/api/webhooks/github`;
+    const callbackUrl =
+      parsed.data.webhookUrl || `${getBaseUrl(req)}/api/webhooks/github`;
 
     // Register webhook on GitHub
     const ghRes = await fetch(
@@ -86,7 +69,7 @@ export async function POST(
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${githubAccount.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           Accept: "application/vnd.github+json",
           "Content-Type": "application/json",
         },
@@ -153,13 +136,10 @@ export async function POST(
       events: ["issues", "pull_request", "push", "issue_comment"],
     });
   } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
     }
-    console.error("Webhook setup error:", error);
-    const message =
-      error instanceof Error ? error.message : "Internal server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return handleRouteError(error);
   }
 }
 
@@ -174,37 +154,15 @@ export async function DELETE(
     const { projectId } = await context.params;
     const session = await requireAuth();
 
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        organization: { include: { members: true } },
+    const project = await requireGitHubProjectAccess(
+      projectId,
+      session.user.id,
+      {
+        adminOnly: true,
+        requireConnectedRepo: true,
+        adminMessage: "Only admins can manage webhooks",
       },
-    });
-
-    if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
-    }
-
-    const member = project.organization.members.find(
-      (m) => m.userId === session.user.id,
     );
-    if (!member || member.role !== "ADMIN") {
-      return NextResponse.json(
-        { error: "Only admins can manage webhooks" },
-        { status: 403 },
-      );
-    }
-
-    if (
-      !project.repoOwner ||
-      !project.repoName ||
-      project.repoProvider !== "GITHUB"
-    ) {
-      return NextResponse.json(
-        { error: "GitHub repository not connected" },
-        { status: 400 },
-      );
-    }
 
     if (!project.webhookId) {
       return NextResponse.json(
@@ -213,16 +171,10 @@ export async function DELETE(
       );
     }
 
-    const githubAccount = await prisma.account.findFirst({
-      where: { userId: session.user.id, provider: "github" },
-    });
-
-    if (!githubAccount?.access_token) {
-      return NextResponse.json(
-        { error: "GitHub account not connected" },
-        { status: 400 },
-      );
-    }
+    const accessToken = await requireGitHubAccessToken(
+      session.user.id,
+      "GitHub account not connected",
+    );
 
     // Delete webhook from GitHub
     const ghRes = await fetch(
@@ -230,7 +182,7 @@ export async function DELETE(
       {
         method: "DELETE",
         headers: {
-          Authorization: `Bearer ${githubAccount.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
           Accept: "application/vnd.github+json",
         },
       },
@@ -256,13 +208,10 @@ export async function DELETE(
 
     return NextResponse.json({ removed: true });
   } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
     }
-    console.error("Webhook removal error:", error);
-    const message =
-      error instanceof Error ? error.message : "Internal server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return handleRouteError(error);
   }
 }
 

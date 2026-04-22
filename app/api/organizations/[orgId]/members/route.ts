@@ -1,6 +1,37 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-server";
+import {
+  badRequest,
+  conflict,
+  forbidden,
+  handleRouteError,
+  notFound,
+  unauthorized,
+} from "@/lib/api-errors";
+import { z } from "zod";
+
+const roleSchema = z.enum(["ADMIN", "MEMBER", "CLIENT"]);
+
+const inviteMemberSchema = z.object({
+  email: z.string().trim().email(),
+  role: roleSchema.optional(),
+});
+
+const updateMemberSchema = z.object({
+  memberId: z.string().trim().min(1),
+  role: roleSchema,
+});
+
+const deleteMemberSchema = z.object({
+  memberId: z.string().trim().min(1),
+});
+
+async function getOrgRequester(orgId: string, userId: string) {
+  return prisma.organizationMember.findFirst({
+    where: { organizationId: orgId, userId },
+  });
+}
 
 export async function GET(
   _req: Request,
@@ -19,12 +50,12 @@ export async function GET(
     });
 
     if (!membership) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw forbidden("Forbidden");
     }
 
     // Clients cannot view the members list
     if (membership.role === "CLIENT") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw forbidden("Forbidden");
     }
 
     const members = await prisma.organizationMember.findMany({
@@ -38,8 +69,11 @@ export async function GET(
     });
 
     return NextResponse.json(members);
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }
 
@@ -56,35 +90,22 @@ export async function POST(
     const session = await requireAuth();
 
     // Check requester is admin
-    const requester = await prisma.organizationMember.findFirst({
-      where: { organizationId: orgId, userId: session.user.id },
-    });
+    const requester = await getOrgRequester(orgId, session.user.id);
     if (!requester || requester.role !== "ADMIN") {
-      return NextResponse.json(
-        { error: "Only admins can invite members" },
-        { status: 403 },
-      );
+      throw forbidden("Only admins can invite members");
     }
 
-    const { email, role } = (await req.json()) as {
-      email?: string;
-      role?: string;
-    };
-
-    if (!email || !email.includes("@")) {
-      return NextResponse.json(
-        { error: "Valid email is required" },
-        { status: 400 },
-      );
+    const parsed = inviteMemberSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      throw badRequest("Invalid member invite payload", parsed.error.flatten());
     }
+
+    const { email, role } = parsed.data;
 
     // Find user by email
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-      return NextResponse.json(
-        { error: "No user found with that email. They must sign up first." },
-        { status: 404 },
-      );
+      throw notFound("No user found with that email. They must sign up first.");
     }
 
     // Check if already a member
@@ -97,16 +118,10 @@ export async function POST(
       },
     });
     if (existing) {
-      return NextResponse.json(
-        { error: "User is already a member" },
-        { status: 409 },
-      );
+      throw conflict("User is already a member");
     }
 
-    const validRoles = ["ADMIN", "MEMBER", "CLIENT"] as const;
-    const memberRole = validRoles.includes(role as (typeof validRoles)[number])
-      ? (role as "ADMIN" | "MEMBER" | "CLIENT")
-      : "MEMBER";
+    const memberRole = role ?? "MEMBER";
 
     const member = await prisma.organizationMember.create({
       data: {
@@ -123,14 +138,10 @@ export async function POST(
 
     return NextResponse.json(member, { status: 201 });
   } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
     }
-    console.error("Invite member error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+    return handleRouteError(error);
   }
 }
 
@@ -146,34 +157,24 @@ export async function PATCH(
     const { orgId } = await context.params;
     const session = await requireAuth();
 
-    const requester = await prisma.organizationMember.findFirst({
-      where: { organizationId: orgId, userId: session.user.id },
-    });
+    const requester = await getOrgRequester(orgId, session.user.id);
     if (!requester || requester.role !== "ADMIN") {
-      return NextResponse.json(
-        { error: "Only admins can change roles" },
-        { status: 403 },
-      );
+      throw forbidden("Only admins can change roles");
     }
 
-    const { memberId, role } = (await req.json()) as {
-      memberId?: string;
-      role?: string;
-    };
-
-    if (!memberId || !role || !["ADMIN", "MEMBER", "CLIENT"].includes(role)) {
-      return NextResponse.json(
-        { error: "memberId and role (ADMIN, MEMBER, or CLIENT) are required" },
-        { status: 400 },
-      );
+    const parsed = updateMemberSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      throw badRequest("Invalid member update payload", parsed.error.flatten());
     }
+
+    const { memberId, role } = parsed.data;
 
     const target = await prisma.organizationMember.findUnique({
       where: { id: memberId },
     });
 
     if (!target || target.organizationId !== orgId) {
-      return NextResponse.json({ error: "Member not found" }, { status: 404 });
+      throw notFound("Member not found");
     }
 
     // Prevent demoting the last admin
@@ -182,10 +183,7 @@ export async function PATCH(
         where: { organizationId: orgId, role: "ADMIN" },
       });
       if (adminCount <= 1) {
-        return NextResponse.json(
-          { error: "Cannot remove the last admin" },
-          { status: 400 },
-        );
+        throw badRequest("Cannot remove the last admin");
       }
     }
 
@@ -201,14 +199,10 @@ export async function PATCH(
 
     return NextResponse.json(updated);
   } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
     }
-    console.error("Update role error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+    return handleRouteError(error);
   }
 }
 
@@ -224,35 +218,32 @@ export async function DELETE(
     const { orgId } = await context.params;
     const session = await requireAuth();
 
-    const requester = await prisma.organizationMember.findFirst({
-      where: { organizationId: orgId, userId: session.user.id },
-    });
+    const requester = await getOrgRequester(orgId, session.user.id);
     if (!requester) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw forbidden("Forbidden");
     }
 
-    const { memberId } = (await req.json()) as { memberId?: string };
-    if (!memberId) {
-      return NextResponse.json(
-        { error: "memberId is required" },
-        { status: 400 },
+    const parsed = deleteMemberSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      throw badRequest(
+        "Invalid member removal payload",
+        parsed.error.flatten(),
       );
     }
+
+    const { memberId } = parsed.data;
 
     const target = await prisma.organizationMember.findUnique({
       where: { id: memberId },
     });
 
     if (!target || target.organizationId !== orgId) {
-      return NextResponse.json({ error: "Member not found" }, { status: 404 });
+      throw notFound("Member not found");
     }
 
     // Non-admins can only remove themselves
     if (requester.role !== "ADMIN" && target.userId !== session.user.id) {
-      return NextResponse.json(
-        { error: "Only admins can remove other members" },
-        { status: 403 },
-      );
+      throw forbidden("Only admins can remove other members");
     }
 
     // Prevent removing the last admin
@@ -261,10 +252,7 @@ export async function DELETE(
         where: { organizationId: orgId, role: "ADMIN" },
       });
       if (adminCount <= 1) {
-        return NextResponse.json(
-          { error: "Cannot remove the last admin" },
-          { status: 400 },
-        );
+        throw badRequest("Cannot remove the last admin");
       }
     }
 
@@ -272,13 +260,9 @@ export async function DELETE(
 
     return NextResponse.json({ removed: true });
   } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
     }
-    console.error("Remove member error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+    return handleRouteError(error);
   }
 }

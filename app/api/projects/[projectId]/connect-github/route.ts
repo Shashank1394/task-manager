@@ -1,6 +1,22 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-server";
+import { badRequest, handleRouteError, unauthorized } from "@/lib/api-errors";
+import {
+  requireGitHubAccessToken,
+  requireGitHubProjectAccess,
+} from "@/lib/github-route";
+import { z } from "zod";
+
+const connectGitHubSchema = z.object({
+  repoOwner: z.string().trim().min(1).max(100),
+  repoName: z
+    .string()
+    .trim()
+    .min(1)
+    .max(100)
+    .transform((value) => value.replace(/\.git$/, "")),
+});
 
 export async function POST(
   req: Request,
@@ -10,54 +26,18 @@ export async function POST(
     const { projectId } = await context.params;
     const session = await requireAuth();
 
-    const { repoOwner, repoName } = await req.json();
-
-    if (!repoOwner || !repoName) {
-      return NextResponse.json(
-        { error: "Repository owner and name are required" },
-        { status: 400 },
+    const parsed = connectGitHubSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      throw badRequest(
+        "Invalid GitHub connection payload",
+        parsed.error.flatten(),
       );
     }
 
-    // Find project + org
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        organization: {
-          include: {
-            members: true,
-          },
-        },
-      },
-    });
+    const { repoOwner, repoName } = parsed.data;
 
-    if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
-    }
-
-    // Check org membership (exclude clients)
-    const isMember = project.organization.members.some(
-      (m) => m.userId === session.user.id && m.role !== "CLIENT",
-    );
-
-    if (!isMember) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    // Check GitHub connected
-    const githubAccount = await prisma.account.findFirst({
-      where: {
-        userId: session.user.id,
-        provider: "github",
-      },
-    });
-
-    if (!githubAccount) {
-      return NextResponse.json(
-        { error: "GitHub not connected" },
-        { status: 400 },
-      );
-    }
+    await requireGitHubProjectAccess(projectId, session.user.id);
+    await requireGitHubAccessToken(session.user.id, "GitHub not connected");
 
     // Attach repo to project
     const updatedProject = await prisma.project.update({
@@ -71,7 +51,9 @@ export async function POST(
 
     return NextResponse.json(updatedProject);
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }

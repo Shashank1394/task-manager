@@ -3,6 +3,39 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-server";
 import { TaskStatus, TaskPriority } from "@prisma/client";
 import { logActivity, notify } from "@/lib/activity";
+import {
+  badRequest,
+  forbidden,
+  handleRouteError,
+  notFound,
+  unauthorized,
+} from "@/lib/api-errors";
+import { z } from "zod";
+
+const patchTaskSchema = z
+  .object({
+    title: z.string().trim().min(3).max(200).optional(),
+    description: z.string().max(10000).nullable().optional(),
+    status: z.enum(TaskStatus).optional(),
+    priority: z.enum(TaskPriority).optional(),
+    assigneeId: z.string().trim().min(1).nullable().optional(),
+    dueDate: z
+      .string()
+      .trim()
+      .min(1)
+      .nullable()
+      .optional()
+      .refine(
+        (value) => value == null || !Number.isNaN(new Date(value).getTime()),
+        "Invalid dueDate",
+      ),
+    sprintId: z.string().trim().min(1).nullable().optional(),
+    estimatedHours: z.coerce.number().min(0).nullable().optional(),
+    loggedHours: z.coerce.number().min(0).optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "Request body must include at least one updatable field",
+  });
 
 /** Shared auth check — returns task or null. Blocks CLIENT role. */
 async function authorizeTask(taskId: string, userId: string) {
@@ -68,7 +101,7 @@ export async function GET(
     });
 
     if (!task) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      throw notFound("Task not found");
     }
 
     // If CLIENT, verify ProjectClient access
@@ -88,13 +121,16 @@ export async function GET(
         },
       });
       if (!clientAccess) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        throw forbidden("Forbidden");
       }
     }
 
     return NextResponse.json(task);
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }
 
@@ -108,17 +144,21 @@ export async function PATCH(
 
     const task = await authorizeTask(taskId, session.user.id);
     if (!task) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw forbidden("Forbidden");
     }
 
-    const body = await req.json();
+    const parsed = patchTaskSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      throw badRequest("Invalid task update payload", parsed.error.flatten());
+    }
+
+    const body = parsed.data;
     const data: Record<string, unknown> = {};
 
     if (body.title !== undefined) data.title = body.title;
     if (body.description !== undefined) data.description = body.description;
-    if (body.status !== undefined) data.status = body.status as TaskStatus;
-    if (body.priority !== undefined)
-      data.priority = body.priority as TaskPriority;
+    if (body.status !== undefined) data.status = body.status;
+    if (body.priority !== undefined) data.priority = body.priority;
     if (body.assigneeId !== undefined)
       data.assigneeId = body.assigneeId || null;
     if (body.dueDate !== undefined)
@@ -184,8 +224,11 @@ export async function PATCH(
     }
 
     return NextResponse.json(updated);
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }
 
@@ -199,7 +242,7 @@ export async function DELETE(
 
     const task = await authorizeTask(taskId, session.user.id);
     if (!task) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw forbidden("Forbidden");
     }
 
     // Get project info before deleting
@@ -220,8 +263,11 @@ export async function DELETE(
     }
 
     return NextResponse.json({ success: true });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }
 

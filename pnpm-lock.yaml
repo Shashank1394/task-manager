@@ -50,6 +50,9 @@ importers:
       scss:
         specifier: ^0.2.4
         version: 0.2.4
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4

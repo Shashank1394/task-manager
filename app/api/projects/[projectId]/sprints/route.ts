@@ -2,6 +2,66 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-server";
 import { SprintStatus } from "@prisma/client";
+import {
+  badRequest,
+  forbidden,
+  handleRouteError,
+  notFound,
+  unauthorized,
+} from "@/lib/api-errors";
+import { z } from "zod";
+
+const nullableDateField = z
+  .string()
+  .trim()
+  .min(1)
+  .nullable()
+  .optional()
+  .refine(
+    (value) => value == null || !Number.isNaN(new Date(value).getTime()),
+    "Invalid date",
+  );
+
+const createSprintSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120),
+    goal: z.string().trim().max(2000).nullable().optional(),
+    startDate: nullableDateField,
+    endDate: nullableDateField,
+  })
+  .refine(
+    (data) =>
+      !data.startDate ||
+      !data.endDate ||
+      new Date(data.endDate) >= new Date(data.startDate),
+    {
+      message: "endDate must be on or after startDate",
+      path: ["endDate"],
+    },
+  );
+
+const updateSprintSchema = z
+  .object({
+    sprintId: z.string().trim().min(1),
+    name: z.string().trim().min(1).max(120).optional(),
+    goal: z.string().trim().max(2000).nullable().optional(),
+    status: z.enum(SprintStatus).optional(),
+    startDate: nullableDateField,
+    endDate: nullableDateField,
+  })
+  .refine((data) => Object.keys(data).some((key) => key !== "sprintId"), {
+    message: "At least one sprint field must be updated",
+  })
+  .refine(
+    (data) =>
+      !data.startDate ||
+      !data.endDate ||
+      new Date(data.endDate) >= new Date(data.startDate),
+    {
+      message: "endDate must be on or after startDate",
+      path: ["endDate"],
+    },
+  );
 
 async function authorizeProject(projectId: string, userId: string) {
   const project = await prisma.project.findUnique({
@@ -31,7 +91,7 @@ export async function GET(
 
     const project = await authorizeProject(projectId, session.user.id);
     if (!project) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw forbidden("Forbidden");
     }
 
     const sprints = await prisma.sprint.findMany({
@@ -44,8 +104,10 @@ export async function GET(
 
     return NextResponse.json(sprints);
   } catch (error) {
-    console.error("GET /sprints error:", error);
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }
 
@@ -60,23 +122,20 @@ export async function POST(
 
     const project = await authorizeProject(projectId, session.user.id);
     if (!project) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw forbidden("Forbidden");
     }
 
-    const body = await req.json();
-    const { name, goal, startDate, endDate } = body;
-
-    if (!name?.trim()) {
-      return NextResponse.json(
-        { error: "Sprint name is required" },
-        { status: 400 },
-      );
+    const parsed = createSprintSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      throw badRequest("Invalid sprint payload", parsed.error.flatten());
     }
+
+    const { name, goal, startDate, endDate } = parsed.data;
 
     const sprint = await prisma.sprint.create({
       data: {
-        name: name.trim(),
-        goal: goal?.trim() || null,
+        name,
+        goal: goal || null,
         startDate: startDate ? new Date(startDate) : null,
         endDate: endDate ? new Date(endDate) : null,
         projectId,
@@ -88,8 +147,10 @@ export async function POST(
 
     return NextResponse.json(sprint, { status: 201 });
   } catch (error) {
-    console.error("POST /sprints error:", error);
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }
 
@@ -104,25 +165,22 @@ export async function PATCH(
 
     const project = await authorizeProject(projectId, session.user.id);
     if (!project) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw forbidden("Forbidden");
     }
 
-    const body = await req.json();
-    const { sprintId, name, goal, status, startDate, endDate } = body;
-
-    if (!sprintId) {
-      return NextResponse.json(
-        { error: "sprintId is required" },
-        { status: 400 },
-      );
+    const parsed = updateSprintSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      throw badRequest("Invalid sprint update payload", parsed.error.flatten());
     }
+
+    const { sprintId, name, goal, status, startDate, endDate } = parsed.data;
 
     const sprint = await prisma.sprint.findFirst({
       where: { id: sprintId, projectId },
     });
 
     if (!sprint) {
-      return NextResponse.json({ error: "Sprint not found" }, { status: 404 });
+      throw notFound("Sprint not found");
     }
 
     // If activating a sprint, complete any currently active sprint
@@ -134,9 +192,9 @@ export async function PATCH(
     }
 
     const data: Record<string, unknown> = {};
-    if (typeof name === "string" && name.trim()) data.name = name.trim();
-    if (typeof goal === "string") data.goal = goal.trim() || null;
-    if (status !== undefined) data.status = status as SprintStatus;
+    if (name !== undefined) data.name = name;
+    if (goal !== undefined) data.goal = goal || null;
+    if (status !== undefined) data.status = status;
     if (startDate !== undefined)
       data.startDate = startDate ? new Date(startDate) : null;
     if (endDate !== undefined)
@@ -152,8 +210,10 @@ export async function PATCH(
 
     return NextResponse.json(updated);
   } catch (error) {
-    console.error("PATCH /sprints error:", error);
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }
 
@@ -168,17 +228,14 @@ export async function DELETE(
 
     const project = await authorizeProject(projectId, session.user.id);
     if (!project) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw forbidden("Forbidden");
     }
 
     const { searchParams } = new URL(req.url);
     const sprintId = searchParams.get("sprintId");
 
     if (!sprintId) {
-      return NextResponse.json(
-        { error: "sprintId is required" },
-        { status: 400 },
-      );
+      throw badRequest("sprintId is required");
     }
 
     const sprint = await prisma.sprint.findFirst({
@@ -186,7 +243,7 @@ export async function DELETE(
     });
 
     if (!sprint) {
-      return NextResponse.json({ error: "Sprint not found" }, { status: 404 });
+      throw notFound("Sprint not found");
     }
 
     // Unlink tasks, then delete sprint
@@ -199,7 +256,9 @@ export async function DELETE(
 
     return NextResponse.json({ deleted: true });
   } catch (error) {
-    console.error("DELETE /sprints error:", error);
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }

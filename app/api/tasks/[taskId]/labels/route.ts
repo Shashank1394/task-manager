@@ -1,6 +1,29 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-server";
+import { Prisma } from "@prisma/client";
+import {
+  badRequest,
+  conflict,
+  forbidden,
+  handleRouteError,
+  notFound,
+  unauthorized,
+} from "@/lib/api-errors";
+import { z } from "zod";
+
+const createLabelSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  color: z
+    .string()
+    .trim()
+    .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Invalid color")
+    .optional(),
+});
+
+const deleteLabelSchema = z.object({
+  labelId: z.string().trim().min(1),
+});
 
 async function authorizeTaskAccess(taskId: string, userId: string) {
   return prisma.task.findFirst({
@@ -29,7 +52,7 @@ export async function GET(
 
     const task = await authorizeTaskAccess(taskId, session.user.id);
     if (!task) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw forbidden("Forbidden");
     }
 
     const labels = await prisma.label.findMany({
@@ -38,8 +61,11 @@ export async function GET(
     });
 
     return NextResponse.json(labels);
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }
 
@@ -53,20 +79,19 @@ export async function POST(
 
     const task = await authorizeTaskAccess(taskId, session.user.id);
     if (!task) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw forbidden("Forbidden");
     }
 
-    const { name, color } = await req.json();
-    if (!name || name.trim().length < 1) {
-      return NextResponse.json(
-        { error: "Label name is required" },
-        { status: 400 },
-      );
+    const parsed = createLabelSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      throw badRequest("Invalid label payload", parsed.error.flatten());
     }
+
+    const { name, color } = parsed.data;
 
     const label = await prisma.label.create({
       data: {
-        name: name.trim(),
+        name,
         color: color || "#6366f1",
         taskId,
       },
@@ -74,13 +99,16 @@ export async function POST(
 
     return NextResponse.json(label, { status: 201 });
   } catch (error) {
-    if (error instanceof Error && error.message.includes("Unique constraint")) {
-      return NextResponse.json(
-        { error: "Label already exists on this task" },
-        { status: 409 },
-      );
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return handleRouteError(conflict("Label already exists on this task"));
     }
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }
 
@@ -94,21 +122,27 @@ export async function DELETE(
 
     const task = await authorizeTaskAccess(taskId, session.user.id);
     if (!task) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw forbidden("Forbidden");
     }
 
-    const { labelId } = await req.json();
-    if (!labelId) {
-      return NextResponse.json(
-        { error: "labelId is required" },
-        { status: 400 },
-      );
+    const parsed = deleteLabelSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      throw badRequest("Invalid label delete payload", parsed.error.flatten());
     }
 
-    await prisma.label.delete({ where: { id: labelId } });
+    const deleted = await prisma.label.deleteMany({
+      where: { id: parsed.data.labelId, taskId },
+    });
+
+    if (deleted.count === 0) {
+      throw notFound("Label not found");
+    }
 
     return NextResponse.json({ deleted: true });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }

@@ -2,23 +2,25 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-server";
 import { Role } from "@prisma/client";
+import { badRequest, handleRouteError, unauthorized } from "@/lib/api-errors";
+import { z } from "zod";
+
+const createOrganizationSchema = z.object({
+  name: z.string().trim().min(3).max(120),
+});
 
 // CREATE organization
 export async function POST(req: Request) {
   try {
     const session = await requireAuth();
-    const { name } = await req.json();
-
-    if (!name || name.trim().length < 3) {
-      return NextResponse.json(
-        { error: "Organization name is required" },
-        { status: 400 },
-      );
+    const parsed = createOrganizationSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      throw badRequest("Invalid organization payload", parsed.error.flatten());
     }
 
     const organization = await prisma.organization.create({
       data: {
-        name,
+        name: parsed.data.name,
         members: {
           create: {
             userId: session.user.id,
@@ -29,8 +31,11 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json(organization, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }
 
@@ -63,7 +68,10 @@ export async function GET() {
     });
 
     return NextResponse.json(organizations);
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }

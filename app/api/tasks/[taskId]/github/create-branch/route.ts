@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-server";
+import { handleRouteError, unauthorized } from "@/lib/api-errors";
+import {
+  requireGitHubAccessToken,
+  requireGitHubTaskAccess,
+} from "@/lib/github-route";
 
 /**
  * POST /api/tasks/[taskId]/github/create-branch
@@ -14,62 +19,15 @@ export async function POST(
     const { taskId } = await context.params;
     const session = await requireAuth();
 
-    // Get task with project info
-    const task = await prisma.task.findFirst({
-      where: {
-        id: taskId,
-        board: {
-          project: {
-            organization: {
-              members: {
-                some: {
-                  userId: session.user.id,
-                  role: { not: "CLIENT" },
-                },
-              },
-            },
-          },
-        },
-      },
-      include: {
-        board: {
-          include: {
-            project: true,
-          },
-        },
-      },
-    });
-
-    if (!task) {
-      return NextResponse.json({ error: "Task not found" }, { status: 404 });
-    }
-
+    const task = await requireGitHubTaskAccess(taskId, session.user.id);
     const project = task.board.project;
-
-    if (
-      !project.repoOwner ||
-      !project.repoName ||
-      project.repoProvider !== "GITHUB"
-    ) {
-      return NextResponse.json(
-        { error: "GitHub repository not connected" },
-        { status: 400 },
-      );
-    }
-
-    const githubAccount = await prisma.account.findFirst({
-      where: { userId: session.user.id, provider: "github" },
-    });
-
-    if (!githubAccount?.access_token) {
-      return NextResponse.json(
-        { error: "GitHub account not connected" },
-        { status: 400 },
-      );
-    }
+    const accessToken = await requireGitHubAccessToken(
+      session.user.id,
+      "GitHub account not connected",
+    );
 
     const headers = {
-      Authorization: `Bearer ${githubAccount.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
       Accept: "application/vnd.github+json",
       "Content-Type": "application/json",
     };
@@ -145,12 +103,9 @@ export async function POST(
       url: `https://github.com/${project.repoOwner}/${project.repoName}/tree/${branchName}`,
     });
   } catch (error) {
-    if (error instanceof Error && error.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
     }
-    console.error("Create branch error:", error);
-    const message =
-      error instanceof Error ? error.message : "Internal server error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return handleRouteError(error);
   }
 }

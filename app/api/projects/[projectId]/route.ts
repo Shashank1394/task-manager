@@ -2,6 +2,36 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, checkClientProjectAccess } from "@/lib/auth-server";
 import { Role } from "@prisma/client";
+import {
+  badRequest,
+  forbidden,
+  handleRouteError,
+  notFound,
+  unauthorized,
+} from "@/lib/api-errors";
+import { z } from "zod";
+
+const patchProjectSchema = z
+  .object({
+    name: z.string().trim().min(3).max(120).optional(),
+    description: z.string().trim().max(2000).nullable().optional(),
+    disconnectGitHub: z.boolean().optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "Request body must include at least one updatable field",
+  });
+
+async function getProjectWithMembers(projectId: string) {
+  return prisma.project.findUnique({
+    where: { id: projectId },
+    include: {
+      board: { select: { id: true } },
+      organization: {
+        include: { members: true },
+      },
+    },
+  });
+}
 
 export async function GET(
   _req: Request,
@@ -11,18 +41,10 @@ export async function GET(
     const { projectId } = await context.params;
     const session = await requireAuth();
 
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        board: { select: { id: true } },
-        organization: {
-          include: { members: true },
-        },
-      },
-    });
+    const project = await getProjectWithMembers(projectId);
 
     if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+      throw notFound("Project not found");
     }
 
     const { allowed } = await checkClientProjectAccess(
@@ -32,11 +54,11 @@ export async function GET(
     );
 
     if (!allowed) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw forbidden("Forbidden");
     }
 
     if (!project.board) {
-      return NextResponse.json({ error: "Board not found" }, { status: 404 });
+      throw notFound("Board not found");
     }
 
     return NextResponse.json({
@@ -50,8 +72,10 @@ export async function GET(
       repoName: project.repoName,
     });
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }
 
@@ -64,17 +88,10 @@ export async function DELETE(
     const { projectId } = await context.params;
     const session = await requireAuth();
 
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        organization: {
-          include: { members: true },
-        },
-      },
-    });
+    const project = await getProjectWithMembers(projectId);
 
     if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+      throw notFound("Project not found");
     }
 
     const membership = project.organization.members.find(
@@ -82,46 +99,18 @@ export async function DELETE(
     );
 
     if (!membership || membership.role !== Role.ADMIN) {
-      return NextResponse.json(
-        { error: "Admin access required" },
-        { status: 403 },
-      );
+      throw forbidden("Admin access required");
     }
 
-    await prisma.$transaction(async (tx) => {
-      const boards = await tx.board.findMany({
-        where: { projectId },
-        select: { id: true },
-      });
-      const boardIds = boards.map((b) => b.id);
-
-      if (boardIds.length > 0) {
-        const tasks = await tx.task.findMany({
-          where: { boardId: { in: boardIds } },
-          select: { id: true },
-        });
-        const taskIds = tasks.map((t) => t.id);
-
-        if (taskIds.length > 0) {
-          await tx.comment.deleteMany({ where: { taskId: { in: taskIds } } });
-          await tx.task.deleteMany({ where: { id: { in: taskIds } } });
-        }
-
-        await tx.board.deleteMany({ where: { id: { in: boardIds } } });
-      }
-
-      await tx.gitHubIssue.deleteMany({ where: { projectId } });
-      await tx.gitHubPR.deleteMany({ where: { projectId } });
-      await tx.gitHubCommit.deleteMany({ where: { projectId } });
-      await tx.gitHubSyncLog.deleteMany({ where: { projectId } });
-
-      await tx.project.delete({ where: { id: projectId } });
-    });
+    // The Prisma schema already defines cascading deletes from Project.
+    await prisma.project.delete({ where: { id: projectId } });
 
     return NextResponse.json({ deleted: true });
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }
 
@@ -134,15 +123,10 @@ export async function PATCH(
     const { projectId } = await context.params;
     const session = await requireAuth();
 
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        organization: { include: { members: true } },
-      },
-    });
+    const project = await getProjectWithMembers(projectId);
 
     if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
+      throw notFound("Project not found");
     }
 
     const membership = project.organization.members.find(
@@ -150,21 +134,26 @@ export async function PATCH(
     );
 
     if (!membership || membership.role !== Role.ADMIN) {
-      return NextResponse.json(
-        { error: "Admin access required" },
-        { status: 403 },
+      throw forbidden("Admin access required");
+    }
+
+    const parsed = patchProjectSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      throw badRequest(
+        "Invalid project update payload",
+        parsed.error.flatten(),
       );
     }
 
-    const body = await req.json();
+    const body = parsed.data;
     const data: Record<string, unknown> = {};
 
-    if (typeof body.name === "string" && body.name.trim()) {
-      data.name = body.name.trim();
+    if (body.name !== undefined) {
+      data.name = body.name;
     }
 
-    if (typeof body.description === "string") {
-      data.description = body.description.trim() || null;
+    if (body.description !== undefined) {
+      data.description = body.description || null;
     }
 
     if (body.disconnectGitHub === true) {
@@ -176,7 +165,7 @@ export async function PATCH(
     }
 
     if (Object.keys(data).length === 0) {
-      return NextResponse.json({ error: "No valid fields" }, { status: 400 });
+      throw badRequest("No valid fields");
     }
 
     const updated = await prisma.project.update({
@@ -192,7 +181,9 @@ export async function PATCH(
       repoName: updated.repoName,
     });
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }

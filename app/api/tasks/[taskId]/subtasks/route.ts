@@ -1,6 +1,32 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth-server";
+import {
+  badRequest,
+  forbidden,
+  handleRouteError,
+  notFound,
+  unauthorized,
+} from "@/lib/api-errors";
+import { z } from "zod";
+
+const createSubtaskSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+});
+
+const updateSubtaskSchema = z
+  .object({
+    subtaskId: z.string().trim().min(1),
+    done: z.boolean().optional(),
+    title: z.string().trim().min(1).max(200).optional(),
+  })
+  .refine((data) => Object.keys(data).some((key) => key !== "subtaskId"), {
+    message: "At least one subtask field must be updated",
+  });
+
+const deleteSubtaskSchema = z.object({
+  subtaskId: z.string().trim().min(1),
+});
 
 async function authorizeTaskAccess(taskId: string, userId: string) {
   return prisma.task.findFirst({
@@ -29,7 +55,7 @@ export async function GET(
 
     const task = await authorizeTaskAccess(taskId, session.user.id);
     if (!task) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw forbidden("Forbidden");
     }
 
     const subtasks = await prisma.subtask.findMany({
@@ -38,8 +64,11 @@ export async function GET(
     });
 
     return NextResponse.json(subtasks);
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }
 
@@ -53,24 +82,24 @@ export async function POST(
 
     const task = await authorizeTaskAccess(taskId, session.user.id);
     if (!task) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw forbidden("Forbidden");
     }
 
-    const { title } = await req.json();
-    if (!title || title.trim().length < 1) {
-      return NextResponse.json(
-        { error: "Subtask title is required" },
-        { status: 400 },
-      );
+    const parsed = createSubtaskSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      throw badRequest("Invalid subtask payload", parsed.error.flatten());
     }
 
     const subtask = await prisma.subtask.create({
-      data: { title: title.trim(), taskId },
+      data: { title: parsed.data.title, taskId },
     });
 
     return NextResponse.json(subtask, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }
 
@@ -84,15 +113,26 @@ export async function PATCH(
 
     const task = await authorizeTaskAccess(taskId, session.user.id);
     if (!task) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw forbidden("Forbidden");
     }
 
-    const { subtaskId, done, title } = await req.json();
-    if (!subtaskId) {
-      return NextResponse.json(
-        { error: "subtaskId is required" },
-        { status: 400 },
+    const parsed = updateSubtaskSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      throw badRequest(
+        "Invalid subtask update payload",
+        parsed.error.flatten(),
       );
+    }
+
+    const { subtaskId, done, title } = parsed.data;
+
+    const subtask = await prisma.subtask.findFirst({
+      where: { id: subtaskId, taskId },
+      select: { id: true },
+    });
+
+    if (!subtask) {
+      throw notFound("Subtask not found");
     }
 
     const data: Record<string, unknown> = {};
@@ -105,8 +145,11 @@ export async function PATCH(
     });
 
     return NextResponse.json(updated);
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }
 
@@ -120,21 +163,30 @@ export async function DELETE(
 
     const task = await authorizeTaskAccess(taskId, session.user.id);
     if (!task) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      throw forbidden("Forbidden");
     }
 
-    const { subtaskId } = await req.json();
-    if (!subtaskId) {
-      return NextResponse.json(
-        { error: "subtaskId is required" },
-        { status: 400 },
+    const parsed = deleteSubtaskSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      throw badRequest(
+        "Invalid subtask delete payload",
+        parsed.error.flatten(),
       );
     }
 
-    await prisma.subtask.delete({ where: { id: subtaskId } });
+    const deleted = await prisma.subtask.deleteMany({
+      where: { id: parsed.data.subtaskId, taskId },
+    });
+
+    if (deleted.count === 0) {
+      throw notFound("Subtask not found");
+    }
 
     return NextResponse.json({ deleted: true });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    if (error instanceof Error && error.message === "Unauthorized") {
+      return handleRouteError(unauthorized());
+    }
+    return handleRouteError(error);
   }
 }
