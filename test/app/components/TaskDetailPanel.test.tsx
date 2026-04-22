@@ -8,6 +8,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -93,6 +94,16 @@ describe("TaskDetailPanel", () => {
                   image: null,
                 },
               },
+              {
+                id: "member-2",
+                role: "CLIENT",
+                user: {
+                  id: "user-3",
+                  name: "Casey Client",
+                  email: "casey@example.com",
+                  image: null,
+                },
+              },
             ]),
             {
               status: 200,
@@ -135,10 +146,127 @@ describe("TaskDetailPanel", () => {
       expect(fetchMock).toHaveBeenCalledWith("/api/tasks/task-1/github");
     });
 
+    const assigneeGroup = screen.getByText("Assignee").closest(".field-group");
+    expect(assigneeGroup).not.toBeNull();
+    expect(
+      within(assigneeGroup as HTMLElement).getByRole("option", {
+        name: "Alex",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(assigneeGroup as HTMLElement).queryByRole("option", {
+        name: "Casey Client",
+      }),
+    ).not.toBeInTheDocument();
+
     await userEvent.click(screen.getByRole("button", { name: /github/i }));
 
     expect(await screen.findByText("Pull Requests (1)")).toBeInTheDocument();
     expect(screen.getByText(/#22 build activity feed/i)).toBeInTheDocument();
+  });
+
+  it("keeps an existing client assignee visible as a legacy disabled option", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (
+        url === "/api/tasks/task-1" &&
+        (!init?.method || init.method === "GET")
+      ) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ...taskDetail,
+              assigneeId: "user-3",
+              assignee: {
+                id: "user-3",
+                name: "Casey Client",
+                email: "casey@example.com",
+                image: null,
+              },
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        );
+      }
+
+      if (url === "/api/organizations/org-1/members") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify([
+              {
+                id: "member-1",
+                role: "ADMIN",
+                user: {
+                  id: "user-2",
+                  name: "Alex",
+                  email: "alex@example.com",
+                  image: null,
+                },
+              },
+              {
+                id: "member-2",
+                role: "CLIENT",
+                user: {
+                  id: "user-3",
+                  name: "Casey Client",
+                  email: "casey@example.com",
+                  image: null,
+                },
+              },
+            ]),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        );
+      }
+
+      if (url === "/api/tasks/task-1/github") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ issue: null, pullRequests: [], commits: [] }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        );
+      }
+
+      return Promise.reject(new Error(`Unexpected fetch: ${url}`));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <TaskDetailPanel
+        taskId="task-1"
+        onClose={vi.fn()}
+        onTaskUpdated={vi.fn()}
+      />,
+    );
+
+    await screen.findByDisplayValue("Build activity feed");
+
+    const assigneeGroup = screen.getByText("Assignee").closest(".field-group");
+    expect(assigneeGroup).not.toBeNull();
+
+    const assigneeSelect = within(assigneeGroup as HTMLElement).getByRole(
+      "combobox",
+    );
+    const legacyOption = within(assigneeGroup as HTMLElement).getByRole(
+      "option",
+      {
+        name: "Casey Client (Client)",
+      },
+    );
+
+    expect(assigneeSelect).toHaveValue("user-3");
+    expect(legacyOption).toBeDisabled();
   });
 
   it("saves edited task fields and notifies the parent", async () => {

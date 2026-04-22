@@ -58,6 +58,10 @@ export default function ClientDashboardPage() {
         <h1>{organization.name}</h1>
         <span className="client-badge">Client View</span>
       </div>
+      <p className="client-description">
+        A focused delivery snapshot with current progress across the projects
+        you have access to.
+      </p>
 
       {/* Overview Stats */}
       <div className="client-stats">
@@ -103,7 +107,11 @@ export default function ClientDashboardPage() {
       <h2 className="client-section-title">Projects</h2>
       <div className="client-projects">
         {projects.map((p) => (
-          <div key={p.id} className="client-project-card">
+          <div
+            key={p.id}
+            id={`client-project-${p.id}`}
+            className="client-project-card"
+          >
             <div className="client-project-header">
               <h3>{p.name}</h3>
               <span className="client-project-pct">{p.completionPct}%</span>
@@ -115,6 +123,10 @@ export default function ClientDashboardPage() {
                 style={{ width: `${p.completionPct}%` }}
               />
             </div>
+
+            <p className="client-project-summary">
+              {p.done} of {p.total} tasks completed
+            </p>
 
             <div className="client-project-stats">
               <span className="client-project-stat">

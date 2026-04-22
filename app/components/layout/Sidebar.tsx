@@ -27,6 +27,12 @@ export default function Sidebar() {
   const [expandedOrgs, setExpandedOrgs] = useState<Set<string>>(new Set());
   const [showUserMenu, setShowUserMenu] = useState(false);
 
+  const clientOnly =
+    orgs.length > 0 && orgs.every((org) => org.members?.[0]?.role === "CLIENT");
+  const homeHref = clientOnly
+    ? `/dashboard/client/${orgs[0]!.id}`
+    : "/dashboard";
+
   useEffect(() => {
     fetch("/api/organizations")
       .then((r) => r.json())
@@ -36,6 +42,10 @@ export default function Sidebar() {
         const orgMatch = pathname.match(/\/organizations\/([^/]+)/);
         if (orgMatch) {
           setExpandedOrgs(new Set([orgMatch[1]]));
+        }
+        const clientMatch = pathname.match(/\/client\/([^/]+)/);
+        if (clientMatch) {
+          setExpandedOrgs((prev) => new Set([...prev, clientMatch[1]]));
         }
         // Fetch projects for each org
         data.forEach((org) => {
@@ -94,17 +104,19 @@ export default function Sidebar() {
   return (
     <div className="sidebar">
       <div className="sidebar__logo">
-        <Link href="/dashboard">DevPilot</Link>
+        <Link href={homeHref}>DevPilot</Link>
       </div>
 
       <nav className="sidebar__nav">
-        <Link
-          href="/dashboard"
-          className={`sidebar__link ${isActive("/dashboard") ? "sidebar__link--active" : ""}`}
-        >
-          <span className="sidebar__icon">📊</span>
-          Dashboard
-        </Link>
+        {!clientOnly && (
+          <Link
+            href="/dashboard"
+            className={`sidebar__link ${isActive("/dashboard") ? "sidebar__link--active" : ""}`}
+          >
+            <span className="sidebar__icon">📊</span>
+            Dashboard
+          </Link>
+        )}
 
         <div className="sidebar__section-label">Organizations</div>
 
@@ -138,8 +150,8 @@ export default function Sidebar() {
                     {(projectsByOrg[org.id] ?? []).map((proj) => (
                       <Link
                         key={proj.id}
-                        href={`/dashboard/client/${org.id}`}
-                        className={`sidebar__link sidebar__link--project ${isActive(`/dashboard/client/${org.id}`) ? "sidebar__link--active" : ""}`}
+                        href={`/dashboard/client/${org.id}#client-project-${proj.id}`}
+                        className="sidebar__link sidebar__link--project"
                       >
                         <span className="sidebar__icon">📁</span>
                         {proj.name}

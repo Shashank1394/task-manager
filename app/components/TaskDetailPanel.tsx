@@ -388,6 +388,17 @@ export default function TaskDetailPanel({
     });
   };
 
+  const assignableMembers = members.filter(
+    (member) => member.role !== "CLIENT",
+  );
+  const legacyClientAssignee =
+    task?.assigneeId == null
+      ? null
+      : (members.find(
+          (member) =>
+            member.user.id === task.assigneeId && member.role === "CLIENT",
+        ) ?? null);
+
   return (
     <>
       {/* Backdrop */}
@@ -523,7 +534,14 @@ export default function TaskDetailPanel({
                 }
               >
                 <option value="">Unassigned</option>
-                {members.map((m) => (
+                {legacyClientAssignee && (
+                  <option value={legacyClientAssignee.user.id} disabled>
+                    {(legacyClientAssignee.user.name ||
+                      legacyClientAssignee.user.email ||
+                      "Current assignee") + " (Client)"}
+                  </option>
+                )}
+                {assignableMembers.map((m) => (
                   <option key={m.user.id} value={m.user.id}>
                     {m.user.name || m.user.email}
                   </option>

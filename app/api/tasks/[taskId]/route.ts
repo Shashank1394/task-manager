@@ -55,6 +55,21 @@ async function authorizeTask(taskId: string, userId: string) {
         },
       },
     },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      assigneeId: true,
+      board: {
+        select: {
+          project: {
+            select: {
+              organizationId: true,
+            },
+          },
+        },
+      },
+    },
   });
   return task;
 }
@@ -169,6 +184,25 @@ export async function PATCH(
         body.estimatedHours !== null ? Number(body.estimatedHours) : null;
     if (body.loggedHours !== undefined)
       data.loggedHours = Math.max(0, Number(body.loggedHours) || 0);
+
+    if (
+      body.assigneeId !== undefined &&
+      body.assigneeId !== task.assigneeId &&
+      body.assigneeId
+    ) {
+      const eligibleAssignee = await prisma.organizationMember.findFirst({
+        where: {
+          organizationId: task.board.project.organizationId,
+          userId: body.assigneeId,
+          role: { not: "CLIENT" },
+        },
+        select: { id: true },
+      });
+
+      if (!eligibleAssignee) {
+        throw badRequest("Tasks can only be assigned to team members");
+      }
+    }
 
     const updated = await prisma.task.update({
       where: { id: taskId },
