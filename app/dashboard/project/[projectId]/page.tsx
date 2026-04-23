@@ -6,6 +6,8 @@ import Link from "next/link";
 import Image from "next/image";
 import TaskDetailPanel from "@/app/components/TaskDetailPanel";
 import ActivityFeed from "@/app/components/ActivityFeed";
+import AiTaskDraftCard from "@/app/components/AiTaskDraftCard";
+import ProjectDigestCard from "@/app/components/ProjectDigestCard";
 import {
   DndContext,
   DragOverlay,
@@ -1849,6 +1851,14 @@ export default function ProjectPage() {
             )}
           </div>
         </div>
+
+        <AiTaskDraftCard
+          projectId={projectIdParam}
+          boardId={boardId}
+          onTaskCreated={(task) => setTasks((prev) => [...prev, task])}
+        />
+
+        <ProjectDigestCard projectId={projectIdParam} />
 
         {/* ACTIVITY FEED */}
         <ActivityFeed projectId={projectIdParam} />

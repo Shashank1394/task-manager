@@ -76,6 +76,9 @@ describe("ClientDashboardPage", () => {
     );
     expect(screen.getByText("1 of 3 tasks completed")).toBeInTheDocument();
     expect(
+      screen.getByRole("button", { name: /generate brief/i }),
+    ).toBeInTheDocument();
+    expect(
       screen.getByText(
         /a focused delivery snapshot with current progress across the projects/i,
       ),

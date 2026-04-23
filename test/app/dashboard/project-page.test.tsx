@@ -175,6 +175,9 @@ describe("ProjectPage", () => {
     expect(
       screen.getByRole("button", { name: /complete sprint/i }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /generate ai brief/i }),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("activity-feed")).toHaveTextContent(
       "Activity for project-1",
     );

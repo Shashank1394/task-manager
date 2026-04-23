@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import ClientDigestCard from "@/app/components/ClientDigestCard";
 
 type ProjectSummary = {
   id: string;
@@ -62,6 +63,8 @@ export default function ClientDashboardPage() {
         A focused delivery snapshot with current progress across the projects
         you have access to.
       </p>
+
+      <ClientDigestCard orgId={orgIdStr} />
 
       {/* Overview Stats */}
       <div className="client-stats">
