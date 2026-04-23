@@ -55,14 +55,29 @@ export default function ClientDashboardPage() {
 
   return (
     <div className="client-dashboard">
-      <div className="client-header">
-        <h1>{organization.name}</h1>
-        <span className="client-badge">Client View</span>
+      <div className="client-hero">
+        <div className="client-copy">
+          <span className="client-eyebrow">Delivery snapshot</span>
+          <div className="client-header">
+            <h1>{organization.name}</h1>
+            <span className="client-badge">Client View</span>
+          </div>
+          <p className="client-description">
+            A focused delivery snapshot with current progress across the
+            projects you have access to.
+          </p>
+        </div>
+        <div className="client-overview-highlight">
+          <span className="client-overview-label">Portfolio progress</span>
+          <strong className="client-overview-value">
+            {overview.overallCompletion}%
+          </strong>
+          <span className="client-overview-meta">
+            {overview.totalInProgress} in progress and {overview.totalDone}{" "}
+            completed
+          </span>
+        </div>
       </div>
-      <p className="client-description">
-        A focused delivery snapshot with current progress across the projects
-        you have access to.
-      </p>
 
       <ClientDigestCard orgId={orgIdStr} />
 

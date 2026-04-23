@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import ThemeToggle from "../ThemeToggle";
 import NotificationBell from "../NotificationBell";
 
@@ -27,8 +27,37 @@ type SearchResults = {
   }[];
 };
 
+function getTopbarMeta(pathname: string) {
+  if (/^\/dashboard\/project\//.test(pathname)) {
+    return {
+      eyebrow: "Execution",
+      title: "Project board",
+    };
+  }
+
+  if (/^\/dashboard\/client\//.test(pathname)) {
+    return {
+      eyebrow: "External view",
+      title: "Client dashboard",
+    };
+  }
+
+  if (/^\/dashboard\/organizations\//.test(pathname)) {
+    return {
+      eyebrow: "Workspace",
+      title: "Organization hub",
+    };
+  }
+
+  return {
+    eyebrow: "Command center",
+    title: "Workspace overview",
+  };
+}
+
 export default function Topbar() {
   const router = useRouter();
+  const pathname = usePathname();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResults | null>(null);
   const [open, setOpen] = useState(false);
@@ -88,13 +117,20 @@ export default function Topbar() {
     (results.tasks.length > 0 ||
       results.projects.length > 0 ||
       results.members.length > 0);
+  const meta = getTopbarMeta(pathname);
 
   return (
     <div className="topbar">
-      <div className="topbar__left">Dashboard</div>
+      <div className="topbar__left">
+        <span className="topbar__eyebrow">{meta.eyebrow}</span>
+        <strong className="topbar__title">{meta.title}</strong>
+      </div>
 
       <div className="topbar__center" ref={wrapperRef}>
         <div className="global-search">
+          <span className="global-search-icon" aria-hidden="true">
+            ⌕
+          </span>
           <input
             type="text"
             className="global-search-input"

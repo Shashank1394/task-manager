@@ -45,16 +45,37 @@ export default function OrganizationsPage() {
   if (loading) return <p>Loading organizations...</p>;
 
   return (
-    <div>
-      <div className="org-header">
-        <h1>Organizations</h1>
-        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-          + Create
-        </button>
+    <div className="org-directory-page">
+      <div className="org-hero">
+        <div className="org-hero-copy">
+          <span className="org-eyebrow">Workspace structure</span>
+          <div className="org-header">
+            <h1>Organizations</h1>
+            <button
+              className="btn btn-primary"
+              onClick={() => setShowModal(true)}
+            >
+              + Create
+            </button>
+          </div>
+          <p className="org-hero-description">
+            Group projects, members, and client access into clear delivery
+            workspaces.
+          </p>
+        </div>
+        <div className="org-hero-summary">
+          <span className="org-hero-summary-label">Active spaces</span>
+          <strong className="org-hero-summary-value">{orgs.length}</strong>
+          <span className="org-hero-summary-meta">
+            {orgs.length === 0
+              ? "Create your first organization to start structuring work."
+              : `${orgs.length} organization${orgs.length !== 1 ? "s" : ""} available in this workspace.`}
+          </span>
+        </div>
       </div>
 
       {orgs.length === 0 ? (
-        <p>No organizations yet.</p>
+        <p className="org-empty">No organizations yet.</p>
       ) : (
         <div className="org-grid">
           {orgs.map((org) => (
@@ -63,7 +84,12 @@ export default function OrganizationsPage() {
               key={org.id}
               className="org-card"
             >
+              <span className="org-card-kicker">Organization</span>
               <h5>{org.name}</h5>
+              <p className="org-card-summary">
+                Open the organization hub to manage projects, members, and
+                workspace settings.
+              </p>
               <small>
                 Created {new Date(org.createdAt).toLocaleDateString()}
               </small>

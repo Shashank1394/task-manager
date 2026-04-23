@@ -106,6 +106,7 @@ export default function DashboardHome() {
 
   const completionPct =
     totalTasks > 0 ? Math.round((byStatus.DONE / totalTasks) * 100) : 0;
+  const activeWorkCount = byStatus.TODO + byStatus.IN_PROGRESS;
 
   const timeUtilization =
     tt.totalEstimated > 0
@@ -130,16 +131,39 @@ export default function DashboardHome() {
     <div className="dash">
       {/* Header */}
       <div className="dash-header">
-        <div>
+        <div className="dash-header-main">
+          <span className="dash-eyebrow">Command center</span>
           <h1 className="dash-title">{greeting}</h1>
           <p className="dash-date">{dateString}</p>
-        </div>
-        {overdueTasks.length > 0 && (
-          <div className="dash-alert">
-            <span className="dash-alert-icon">!</span>
-            {overdueTasks.length} overdue task{overdueTasks.length > 1 && "s"}
+          <div className="dash-summary-chips">
+            <span className="dash-summary-chip">{data.orgCount} orgs</span>
+            <span className="dash-summary-chip">
+              {projectSummaries.length} active projects
+            </span>
+            <span className="dash-summary-chip">
+              {activeSprints.length} live sprint
+              {activeSprints.length !== 1 ? "s" : ""}
+            </span>
           </div>
-        )}
+        </div>
+        <div className="dash-header-side">
+          <div className="dash-focus-card">
+            <span className="dash-focus-label">Delivery pulse</span>
+            <strong className="dash-focus-value">
+              {completionPct}% complete
+            </strong>
+            <span className="dash-focus-meta">
+              {activeWorkCount} active task{activeWorkCount !== 1 ? "s" : ""}{" "}
+              across your workspace
+            </span>
+          </div>
+          {overdueTasks.length > 0 && (
+            <div className="dash-alert">
+              <span className="dash-alert-icon">!</span>
+              {overdueTasks.length} overdue task{overdueTasks.length > 1 && "s"}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Stats Row — 6 columns */}

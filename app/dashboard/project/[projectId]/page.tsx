@@ -99,6 +99,13 @@ type SprintDraft = {
   endDate: string;
 };
 
+type ProjectMeta = {
+  name?: string;
+  description?: string | null;
+  repoOwner?: string | null;
+  repoName?: string | null;
+};
+
 function toDateInputValue(value: string | null) {
   return value ? value.slice(0, 10) : "";
 }
@@ -222,6 +229,7 @@ export default function ProjectPage() {
 
   const [newTask, setNewTask] = useState<{ [key: string]: string }>({});
   const [boardId, setBoardId] = useState<string | null>(null);
+  const [projectMeta, setProjectMeta] = useState<ProjectMeta | null>(null);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
@@ -275,9 +283,14 @@ export default function ProjectPage() {
     }
 
     Promise.all([
-      fetchJson<{ board: { id: string }; webhookActive: boolean }>(
-        `/api/projects/${projectIdParam}`,
-      ),
+      fetchJson<{
+        board: { id: string };
+        webhookActive: boolean;
+        name?: string;
+        description?: string | null;
+        repoOwner?: string | null;
+        repoName?: string | null;
+      }>(`/api/projects/${projectIdParam}`),
       fetchJson<Task[]>(`/api/projects/${projectIdParam}/tasks`),
       fetchJson<GitHubStatus>(
         `/api/projects/${projectIdParam}/github-status`,
@@ -303,6 +316,12 @@ export default function ProjectPage() {
         ]) => {
           setBoardId(projectData.board.id);
           setWebhookActive(projectData.webhookActive);
+          setProjectMeta({
+            name: projectData.name,
+            description: projectData.description,
+            repoOwner: projectData.repoOwner,
+            repoName: projectData.repoName,
+          });
           setTasks(taskData);
           setGithub(githubData);
           setSyncStatus(syncData);
@@ -1014,6 +1033,22 @@ export default function ProjectPage() {
   const latestClientInvite = clients[0]
     ? formatDisplayDate(clients[0].createdAt)
     : null;
+  const totalTrackedTasks = tasks.length;
+  const totalDoneTasks = tasks.filter((task) => task.status === "DONE").length;
+  const totalOpenTasks = totalTrackedTasks - totalDoneTasks;
+  const boardCompletionPct =
+    totalTrackedTasks > 0
+      ? Math.round((totalDoneTasks / totalTrackedTasks) * 100)
+      : 0;
+  const projectTitle = projectMeta?.name?.trim() || "Project board";
+  const projectDescription =
+    projectMeta?.description?.trim() ||
+    "Manage delivery scope, sprint pacing, client visibility, and GitHub execution from one control surface.";
+  const githubConnectionLabel = github?.repository?.name
+    ? `GitHub connected: ${github.repository.name}`
+    : projectMeta?.repoOwner && projectMeta?.repoName
+      ? `GitHub linked: ${projectMeta.repoOwner}/${projectMeta.repoName}`
+      : "GitHub not connected";
 
   const handleDragStart = (event: DragStartEvent) => {
     const task = tasks.find((t) => t.id === event.active.id);
@@ -1085,16 +1120,49 @@ export default function ProjectPage() {
   return (
     <div className="project-page">
       <div className="board-area">
+        <div className="project-hero">
+          <div className="project-hero-copy">
+            <span className="project-hero-eyebrow">Project board</span>
+            <div className="project-hero-title-row">
+              <h1 className="project-hero-title">{projectTitle}</h1>
+              {activeSprint && (
+                <span className="project-hero-badge">Sprint live</span>
+              )}
+            </div>
+            <p className="project-hero-description">{projectDescription}</p>
+            <div className="project-hero-chips">
+              <span className="project-hero-chip">
+                {totalTrackedTasks} tasks tracked
+              </span>
+              <span className="project-hero-chip">
+                {clients.length} client viewer{clients.length !== 1 ? "s" : ""}
+              </span>
+              <span className="project-hero-chip">
+                {sprints.length} sprint{sprints.length !== 1 ? "s" : ""}
+              </span>
+              <span className="project-hero-chip">{githubConnectionLabel}</span>
+            </div>
+          </div>
+          <div className="project-hero-summary">
+            <span className="project-hero-summary-label">Completion</span>
+            <strong className="project-hero-summary-value">
+              {boardCompletionPct}%
+            </strong>
+            <span className="project-hero-summary-meta">
+              {totalDoneTasks} done and {totalOpenTasks} still open
+            </span>
+            <Link
+              href={`/dashboard/project/${projectIdParam}/settings`}
+              className="project-hero-action"
+            >
+              Open project settings
+            </Link>
+          </div>
+        </div>
+
         {/* FILTER BAR */}
         <div className="filter-bar">
           <div className="filter-bar-inputs">
-            <Link
-              href={`/dashboard/project/${projectIdParam}/settings`}
-              className="settings-gear"
-              title="Project Settings"
-            >
-              ⚙
-            </Link>
             <input
               type="text"
               className="filter-search"

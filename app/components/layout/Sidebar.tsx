@@ -17,6 +17,11 @@ type Project = {
   name: string;
 };
 
+function getInitialBadge(value: string, fallback: string) {
+  const initial = value.trim().charAt(0).toUpperCase();
+  return initial || fallback;
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
@@ -105,6 +110,7 @@ export default function Sidebar() {
     <div className="sidebar">
       <div className="sidebar__logo">
         <Link href={homeHref}>DevPilot</Link>
+        <span className="sidebar__logo-subtitle">Delivery control room</span>
       </div>
 
       <nav className="sidebar__nav">
@@ -113,7 +119,9 @@ export default function Sidebar() {
             href="/dashboard"
             className={`sidebar__link ${isActive("/dashboard") ? "sidebar__link--active" : ""}`}
           >
-            <span className="sidebar__icon">📊</span>
+            <span className="sidebar__icon" aria-hidden="true">
+              DB
+            </span>
             Dashboard
           </Link>
         )}
@@ -131,7 +139,9 @@ export default function Sidebar() {
                     href={`/dashboard/client/${org.id}`}
                     className={`sidebar__link ${isActive(`/dashboard/client/${org.id}`) ? "sidebar__link--active" : ""}`}
                   >
-                    <span className="sidebar__icon">📊</span>
+                    <span className="sidebar__icon" aria-hidden="true">
+                      CL
+                    </span>
                     {org.name}
                     <span className="sidebar__client-tag">Client</span>
                   </Link>
@@ -153,7 +163,9 @@ export default function Sidebar() {
                         href={`/dashboard/client/${org.id}#client-project-${proj.id}`}
                         className="sidebar__link sidebar__link--project"
                       >
-                        <span className="sidebar__icon">📁</span>
+                        <span className="sidebar__icon" aria-hidden="true">
+                          {getInitialBadge(proj.name, "P")}
+                        </span>
                         {proj.name}
                       </Link>
                     ))}
@@ -170,7 +182,9 @@ export default function Sidebar() {
                   href={`/dashboard/organizations/${org.id}`}
                   className={`sidebar__link ${isActive(`/dashboard/organizations/${org.id}`) ? "sidebar__link--active" : ""}`}
                 >
-                  <span className="sidebar__icon">🏢</span>
+                  <span className="sidebar__icon" aria-hidden="true">
+                    {getInitialBadge(org.name, "O")}
+                  </span>
                   {org.name}
                 </Link>
                 <button
@@ -190,7 +204,9 @@ export default function Sidebar() {
                       href={`/dashboard/project/${proj.id}`}
                       className={`sidebar__link sidebar__link--project ${isActive(`/dashboard/project/${proj.id}`) ? "sidebar__link--active" : ""}`}
                     >
-                      <span className="sidebar__icon">📁</span>
+                      <span className="sidebar__icon" aria-hidden="true">
+                        {getInitialBadge(proj.name, "P")}
+                      </span>
                       {proj.name}
                     </Link>
                   ))}

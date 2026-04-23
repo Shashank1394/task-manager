@@ -9,6 +9,12 @@ type ProjectDigest = {
   highlights: string[];
   risks: string[];
   nextSteps: string[];
+  etaReport: {
+    projectedCompletionDate: string | null;
+    confidence: "LOW" | "MEDIUM" | "HIGH";
+    summary: string;
+    assumptions: string[];
+  };
   snapshot: {
     totalTasks: number;
     doneTasks: number;
@@ -35,8 +41,31 @@ function formatGeneratedAt(value: string) {
   });
 }
 
+function formatEtaDate(value: string | null) {
+  if (!value) {
+    return "Forecast needs more signal";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Forecast needs more signal";
+  }
+
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 function getDigestSourceLabel(source: ProjectDigest["source"]) {
   return source === "llm" ? "Ollama" : "Fallback";
+}
+
+function getEtaConfidenceLabel(
+  confidence: ProjectDigest["etaReport"]["confidence"],
+) {
+  return `${confidence.toLowerCase()} confidence`;
 }
 
 export default function ProjectDigestCard({
@@ -124,6 +153,28 @@ export default function ProjectDigestCard({
           </div>
 
           <p className="project-digest-summary">{digest.summary}</p>
+
+          <div className="project-digest-eta-card">
+            <div className="project-digest-eta-header">
+              <span className="project-digest-label">Completion ETA</span>
+              <span
+                className={`project-digest-eta-confidence ${digest.etaReport.confidence.toLowerCase()}`}
+              >
+                {getEtaConfidenceLabel(digest.etaReport.confidence)}
+              </span>
+            </div>
+            <strong className="project-digest-eta-date">
+              {formatEtaDate(digest.etaReport.projectedCompletionDate)}
+            </strong>
+            <p className="project-digest-eta-summary">
+              {digest.etaReport.summary}
+            </p>
+            <ul className="project-digest-eta-assumptions">
+              {digest.etaReport.assumptions.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
 
           <div className="project-digest-section">
             <span className="project-digest-label">Highlights</span>

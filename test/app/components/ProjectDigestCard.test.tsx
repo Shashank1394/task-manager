@@ -22,6 +22,16 @@ describe("ProjectDigestCard", () => {
             generatedAt: "2026-04-23T10:00:00.000Z",
             summary:
               "Roadmap is running Release Sprint with 1 scoped task done, 1 task in progress, and 1 task still queued.",
+            etaReport: {
+              projectedCompletionDate: "2026-05-12T12:00:00.000Z",
+              confidence: "MEDIUM",
+              summary:
+                "Roadmap is currently tracking toward May 12, 2026 with medium confidence based on 1/3 tasks complete and 2 still open.",
+              assumptions: [
+                "Release Sprint remains the main delivery window for the current scope.",
+                "Overdue work is closed without adding more than one extra sprint of scope.",
+              ],
+            },
             highlights: [
               "Release Sprint is the active sprint with 3 tasks scoped.",
               'Latest delivery signal: moved "Backlog setup" from TODO to IN PROGRESS',
@@ -69,6 +79,9 @@ describe("ProjectDigestCard", () => {
       await screen.findByText(/Roadmap is running Release Sprint/i),
     ).toBeInTheDocument();
     expect(screen.getByText("Fallback")).toBeInTheDocument();
+    expect(screen.getByText("Completion ETA")).toBeInTheDocument();
+    expect(screen.getByText("May 12, 2026")).toBeInTheDocument();
+    expect(screen.getByText("medium confidence")).toBeInTheDocument();
     expect(
       screen.getByText(
         "1 overdue task needs attention before the schedule slips further.",

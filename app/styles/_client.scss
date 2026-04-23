@@ -5,20 +5,60 @@
   margin: 0 auto;
 }
 
+.client-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  padding: 1.15rem 1.2rem;
+  margin-bottom: 1.25rem;
+  border-radius: 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--border-color) 78%, var(--accent));
+  background:
+    radial-gradient(
+      circle at top left,
+      color-mix(in srgb, var(--accent) 12%, transparent),
+      transparent 40%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bg-surface) 94%, var(--bg-primary)),
+      var(--bg-surface)
+    );
+
+  @media (min-width: 820px) {
+    grid-template-columns: minmax(0, 1fr) 220px;
+    align-items: center;
+  }
+}
+
+.client-copy {
+  display: flex;
+  flex-direction: column;
+}
+
+.client-eyebrow {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 0.35rem;
+}
+
 .client-header {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0.4rem;
 
   h1 {
     margin: 0;
-    font-size: 1.5rem;
+    font-size: 1.8rem;
   }
 }
 
 .client-description {
-  margin: -0.5rem 0 1.25rem;
+  margin: 0;
   max-width: 42rem;
   font-size: 0.92rem;
   line-height: 1.55;
@@ -34,6 +74,36 @@
   background: var(--accent, #4dabf7);
   color: #fff;
   border-radius: 999px;
+}
+
+.client-overview-highlight {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.95rem 1rem;
+  border-radius: 0.8rem;
+  background: color-mix(in srgb, var(--accent, #4dabf7) 9%, var(--bg-surface));
+  border: 1px solid color-mix(in srgb, var(--accent, #4dabf7) 18%, transparent);
+}
+
+.client-overview-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.client-overview-value {
+  font-size: 2rem;
+  line-height: 1;
+  color: var(--text-primary);
+}
+
+.client-overview-meta {
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
 }
 
 .client-loading,
@@ -218,6 +288,84 @@
   color: var(--text-primary);
 }
 
+.client-digest-eta-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.8rem 0.85rem;
+  border-radius: 0.6rem;
+  border: 1px solid
+    color-mix(in srgb, var(--accent, #4dabf7) 18%, var(--border-color));
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--accent, #4dabf7) 8%, transparent),
+      transparent
+    ),
+    color-mix(in srgb, var(--bg-surface) 94%, var(--bg-primary));
+}
+
+.client-digest-eta-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.client-digest-eta-confidence {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.16rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+
+  &.high {
+    background: rgba(34, 197, 94, 0.12);
+    color: #16a34a;
+  }
+
+  &.medium {
+    background: rgba(245, 158, 11, 0.16);
+    color: #d97706;
+  }
+
+  &.low {
+    background: rgba(148, 163, 184, 0.16);
+    color: var(--text-secondary);
+  }
+}
+
+.client-digest-eta-date {
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.client-digest-eta-summary {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.client-digest-eta-assumptions {
+  margin: 0;
+  padding-left: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+
+  li::marker {
+    color: var(--accent, #4dabf7);
+  }
+}
+
 .client-digest-section {
   display: flex;
   flex-direction: column;
@@ -271,11 +419,21 @@
   padding: 1.25rem;
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
-  border-radius: 0.5rem;
+  border-radius: 0.8rem;
   transition:
     border-color 0.2s ease,
     box-shadow 0.2s ease,
     transform 0.2s ease;
+
+  &:hover {
+    border-color: color-mix(
+      in srgb,
+      var(--border-color) 68%,
+      var(--accent, #4dabf7)
+    );
+    box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+    transform: translateY(-2px);
+  }
 
   &:target {
     border-color: var(--accent, #4dabf7);

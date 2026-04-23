@@ -13,9 +13,11 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const pushMock = vi.hoisted(() => vi.fn());
+const usePathnameMock = vi.hoisted(() => vi.fn());
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock }),
+  usePathname: () => usePathnameMock(),
 }));
 
 import Topbar from "@/app/components/layout/Topbar";
@@ -27,6 +29,8 @@ afterEach(() => {
 describe("Topbar", () => {
   beforeEach(() => {
     pushMock.mockReset();
+    usePathnameMock.mockReset();
+    usePathnameMock.mockReturnValue("/dashboard");
     vi.useRealTimers();
   });
 

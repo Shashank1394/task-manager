@@ -214,17 +214,50 @@ export default function OrgPage() {
 
   return (
     <div className="org-page">
-      {/* Header */}
-      <div className="org-page-header">
-        <h1>{org?.name ?? "Organization"}</h1>
-        {isAdmin && tab === "projects" && (
-          <button
-            className="btn btn-primary"
-            onClick={() => setShowProjectModal(true)}
-          >
-            + New Project
-          </button>
-        )}
+      <div className="org-hero org-hero-detail">
+        <div className="org-hero-copy">
+          <span className="org-eyebrow">Organization hub</span>
+          <div className="org-page-header">
+            <h1>{org?.name ?? "Organization"}</h1>
+            {isAdmin && tab === "projects" && (
+              <button
+                className="btn btn-primary"
+                onClick={() => setShowProjectModal(true)}
+              >
+                + New Project
+              </button>
+            )}
+          </div>
+          <p className="org-hero-description">
+            Manage project delivery, workspace access, and organization-wide
+            settings from one place.
+          </p>
+          <div className="org-hero-chips">
+            <span className="org-hero-chip">{projects.length} projects</span>
+            <span className="org-hero-chip">{members.length} members</span>
+            <span className="org-hero-chip">
+              {members.filter((member) => member.role === "CLIENT").length}{" "}
+              client access
+            </span>
+          </div>
+        </div>
+        <div className="org-hero-summary">
+          <span className="org-hero-summary-label">Current focus</span>
+          <strong className="org-hero-summary-value">
+            {tab === "projects"
+              ? `${projects.length}`
+              : tab === "members"
+                ? `${members.length}`
+                : "Admin"}
+          </strong>
+          <span className="org-hero-summary-meta">
+            {tab === "projects"
+              ? "Projects currently tracked in this workspace."
+              : tab === "members"
+                ? "People and clients with access to this organization."
+                : "Administrative controls for naming and deletion."}
+          </span>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -268,7 +301,12 @@ export default function OrgPage() {
                     href={`/dashboard/project/${p.id}`}
                     className="org-card-link"
                   >
+                    <span className="org-card-kicker">Project</span>
                     <h5>{p.name}</h5>
+                    <p className="org-card-summary">
+                      Open the project board to manage scope, AI briefs, sprint
+                      pacing, and GitHub delivery signals.
+                    </p>
                     <small>
                       Created {new Date(p.createdAt).toLocaleDateString()}
                     </small>

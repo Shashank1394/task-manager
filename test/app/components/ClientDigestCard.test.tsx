@@ -22,6 +22,16 @@ describe("ClientDigestCard", () => {
             generatedAt: "2026-04-23T10:00:00.000Z",
             summary:
               "Platform Team currently has 1 project in view with 33% of tracked work completed overall.",
+            etaReport: {
+              projectedCompletionDate: "2026-05-18T12:00:00.000Z",
+              confidence: "MEDIUM",
+              summary:
+                "Platform Team is currently trending toward May 18, 2026 based on the visible completion trend across 1 project.",
+              assumptions: [
+                "Current progress continues at roughly the same pace.",
+                "The visible scope stays close to what is currently shown in the dashboard.",
+              ],
+            },
             highlights: [
               "1 task is complete across the visible portfolio.",
               "Roadmap is the furthest along at 33% complete.",
@@ -61,6 +71,9 @@ describe("ClientDigestCard", () => {
       await screen.findByText(/Platform Team currently has 1 project in view/i),
     ).toBeInTheDocument();
     expect(screen.getByText("Fallback")).toBeInTheDocument();
+    expect(screen.getByText("Delivery outlook")).toBeInTheDocument();
+    expect(screen.getByText("May 18, 2026")).toBeInTheDocument();
+    expect(screen.getByText("medium confidence")).toBeInTheDocument();
     expect(screen.getByText("Watchouts")).toBeInTheDocument();
     expect(screen.getByText(/Track Roadmap/i)).toBeInTheDocument();
   });

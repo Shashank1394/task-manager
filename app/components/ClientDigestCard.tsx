@@ -9,6 +9,12 @@ type ClientDigest = {
   highlights: string[];
   risks: string[];
   nextSteps: string[];
+  etaReport: {
+    projectedCompletionDate: string | null;
+    confidence: "LOW" | "MEDIUM" | "HIGH";
+    summary: string;
+    assumptions: string[];
+  };
   snapshot: {
     projectCount: number;
     totalTasks: number;
@@ -33,8 +39,31 @@ function formatGeneratedAt(value: string) {
   });
 }
 
+function formatEtaDate(value: string | null) {
+  if (!value) {
+    return "Outlook needs more visible progress";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Outlook needs more visible progress";
+  }
+
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 function getDigestSourceLabel(source: ClientDigest["source"]) {
   return source === "llm" ? "Ollama" : "Fallback";
+}
+
+function getEtaConfidenceLabel(
+  confidence: ClientDigest["etaReport"]["confidence"],
+) {
+  return `${confidence.toLowerCase()} confidence`;
 }
 
 export default function ClientDigestCard({ orgId }: { orgId: string }) {
@@ -117,6 +146,28 @@ export default function ClientDigestCard({ orgId }: { orgId: string }) {
           </div>
 
           <p className="client-digest-summary">{digest.summary}</p>
+
+          <div className="client-digest-eta-card">
+            <div className="client-digest-eta-header">
+              <span className="client-digest-label">Delivery outlook</span>
+              <span
+                className={`client-digest-eta-confidence ${digest.etaReport.confidence.toLowerCase()}`}
+              >
+                {getEtaConfidenceLabel(digest.etaReport.confidence)}
+              </span>
+            </div>
+            <strong className="client-digest-eta-date">
+              {formatEtaDate(digest.etaReport.projectedCompletionDate)}
+            </strong>
+            <p className="client-digest-eta-summary">
+              {digest.etaReport.summary}
+            </p>
+            <ul className="client-digest-eta-assumptions">
+              {digest.etaReport.assumptions.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </div>
 
           <div className="client-digest-section">
             <span className="client-digest-label">Highlights</span>

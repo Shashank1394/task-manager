@@ -76,6 +76,18 @@ describe("client ai digest route", () => {
       summary: expect.stringContaining(
         "Platform Team currently has 1 project in view",
       ),
+      etaReport: {
+        projectedCompletionDate: expect.stringMatching(/^2026-05-/),
+        confidence: "MEDIUM",
+        summary: expect.stringContaining(
+          "Platform Team is currently trending toward",
+        ),
+        assumptions: expect.arrayContaining([
+          expect.stringContaining(
+            "Current progress continues at roughly the same pace.",
+          ),
+        ]),
+      },
       highlights: expect.arrayContaining([
         expect.stringContaining("1 task is complete"),
         expect.stringContaining("Roadmap is the furthest along"),

@@ -45,9 +45,19 @@ describe("project ai digest route", () => {
 
   it("builds a deterministic brief from project signals", async () => {
     prismaMock.project.findFirst.mockResolvedValueOnce({
+      description: "Investor-facing delivery board",
       name: "Roadmap",
       clients: [{ id: "client-1" }],
-      sprints: [{ id: "sprint-1", name: "Release Sprint", status: "ACTIVE" }],
+      sprints: [
+        {
+          id: "sprint-1",
+          name: "Release Sprint",
+          status: "ACTIVE",
+          goal: "Land the showcase flow",
+          startDate: new Date("2026-04-20T00:00:00.000Z"),
+          endDate: new Date("2026-05-05T12:00:00.000Z"),
+        },
+      ],
       activities: [
         {
           message: 'moved "Backlog setup" from TODO to IN PROGRESS',
@@ -63,6 +73,9 @@ describe("project ai digest route", () => {
             dueDate: new Date("2000-01-01T00:00:00.000Z"),
             assigneeId: null,
             sprintId: "sprint-1",
+            estimatedHours: 6,
+            loggedHours: 1,
+            createdAt: new Date("2026-04-20T00:00:00.000Z"),
           },
           {
             id: "task-2",
@@ -71,6 +84,9 @@ describe("project ai digest route", () => {
             dueDate: null,
             assigneeId: "user-2",
             sprintId: "sprint-1",
+            estimatedHours: 8,
+            loggedHours: 4,
+            createdAt: new Date("2026-04-21T00:00:00.000Z"),
           },
           {
             id: "task-3",
@@ -79,6 +95,9 @@ describe("project ai digest route", () => {
             dueDate: null,
             assigneeId: "user-3",
             sprintId: "sprint-1",
+            estimatedHours: 4,
+            loggedHours: 4,
+            createdAt: new Date("2026-04-19T00:00:00.000Z"),
           },
         ],
       },
@@ -103,6 +122,18 @@ describe("project ai digest route", () => {
       nextSteps: expect.arrayContaining([
         expect.stringContaining("Re-sequence or unblock Backlog setup"),
       ]),
+      etaReport: {
+        projectedCompletionDate: expect.stringMatching(/^2026-05-/),
+        confidence: "MEDIUM",
+        summary: expect.stringContaining(
+          "Roadmap is currently tracking toward",
+        ),
+        assumptions: expect.arrayContaining([
+          expect.stringContaining(
+            "Release Sprint remains the main delivery window",
+          ),
+        ]),
+      },
       snapshot: {
         totalTasks: 3,
         doneTasks: 1,
@@ -118,9 +149,19 @@ describe("project ai digest route", () => {
 
   it("prefers an Ollama-generated brief using the dedicated local qwen model", async () => {
     prismaMock.project.findFirst.mockResolvedValueOnce({
+      description: "Investor-facing delivery board",
       name: "Roadmap",
       clients: [{ id: "client-1" }],
-      sprints: [{ id: "sprint-1", name: "Release Sprint", status: "ACTIVE" }],
+      sprints: [
+        {
+          id: "sprint-1",
+          name: "Release Sprint",
+          status: "ACTIVE",
+          goal: "Land the showcase flow",
+          startDate: new Date("2026-04-20T00:00:00.000Z"),
+          endDate: new Date("2026-05-05T12:00:00.000Z"),
+        },
+      ],
       activities: [
         {
           message: 'moved "Backlog setup" from TODO to IN PROGRESS',
@@ -136,31 +177,60 @@ describe("project ai digest route", () => {
             dueDate: null,
             assigneeId: null,
             sprintId: "sprint-1",
+            estimatedHours: 6,
+            loggedHours: 1,
+            createdAt: new Date("2026-04-20T00:00:00.000Z"),
           },
         ],
       },
     });
 
-    const fetchMock = vi.fn(() =>
-      Promise.resolve(
-        new Response(
-          JSON.stringify({
-            message: {
-              content: JSON.stringify({
-                summary: "LLM summary",
-                highlights: ["LLM highlight"],
-                risks: ["LLM risk"],
-                nextSteps: ["LLM next step"],
-              }),
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              message: {
+                content: JSON.stringify({
+                  summary: "LLM summary",
+                  highlights: ["LLM highlight"],
+                  risks: ["LLM risk"],
+                  nextSteps: ["LLM next step"],
+                }),
+              },
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
             },
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
+          ),
         ),
-      ),
-    );
+      )
+      .mockImplementationOnce(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              message: {
+                content: JSON.stringify({
+                  projectedCompletionDate: "2026-05-09T12:00:00.000Z",
+                  confidence: "MEDIUM",
+                  summary:
+                    "Roadmap is tracking toward May 9, 2026 with medium confidence if the active sprint closes on plan.",
+                  assumptions: [
+                    "Release Sprint stays the main delivery window.",
+                    "Ownership remains stable through the remaining scope.",
+                  ],
+                }),
+              },
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        ),
+      );
     vi.stubGlobal("fetch", fetchMock);
 
     const response = await GET(
@@ -183,6 +253,16 @@ describe("project ai digest route", () => {
       highlights: ["LLM highlight"],
       risks: ["LLM risk"],
       nextSteps: ["LLM next step"],
+      etaReport: {
+        projectedCompletionDate: "2026-05-09T12:00:00.000Z",
+        confidence: "MEDIUM",
+        summary:
+          "Roadmap is tracking toward May 9, 2026 with medium confidence if the active sprint closes on plan.",
+        assumptions: [
+          "Release Sprint stays the main delivery window.",
+          "Ownership remains stable through the remaining scope.",
+        ],
+      },
       snapshot: {
         totalTasks: 1,
         doneTasks: 0,
