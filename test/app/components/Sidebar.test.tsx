@@ -103,6 +103,8 @@ describe("Sidebar", () => {
 
     render(<Sidebar />);
 
+    expect(screen.queryByText("Dashboard")).not.toBeInTheDocument();
+
     await waitFor(() => {
       expect(screen.getByRole("link", { name: "DevPilot" })).toHaveAttribute(
         "href",

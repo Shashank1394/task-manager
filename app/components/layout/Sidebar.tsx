@@ -26,17 +26,24 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const [orgs, setOrgs] = useState<Org[]>([]);
+  const [orgsLoaded, setOrgsLoaded] = useState(false);
   const [projectsByOrg, setProjectsByOrg] = useState<Record<string, Project[]>>(
     {},
   );
   const [expandedOrgs, setExpandedOrgs] = useState<Set<string>>(new Set());
   const [showUserMenu, setShowUserMenu] = useState(false);
 
+  const inClientView = pathname.startsWith("/dashboard/client/");
   const clientOnly =
-    orgs.length > 0 && orgs.every((org) => org.members?.[0]?.role === "CLIENT");
+    orgsLoaded &&
+    orgs.length > 0 &&
+    orgs.every((org) => org.members?.[0]?.role === "CLIENT");
+  const showGlobalDashboardLink = orgsLoaded ? !clientOnly : !inClientView;
   const homeHref = clientOnly
     ? `/dashboard/client/${orgs[0]!.id}`
-    : "/dashboard";
+    : showGlobalDashboardLink
+      ? "/dashboard"
+      : pathname;
 
   useEffect(() => {
     fetch("/api/organizations")
@@ -92,7 +99,8 @@ export default function Sidebar() {
             .catch(() => {});
         });
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setOrgsLoaded(true));
   }, [pathname]);
 
   const toggleOrg = (orgId: string) => {
@@ -114,7 +122,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="sidebar__nav">
-        {!clientOnly && (
+        {showGlobalDashboardLink && (
           <Link
             href="/dashboard"
             className={`sidebar__link ${isActive("/dashboard") ? "sidebar__link--active" : ""}`}
